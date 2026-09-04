@@ -102,6 +102,7 @@ class Vessel:
     label: str
     x: float; y: float; w: float; h: float
     label_outside: bool = False    # True: draw label above the box instead of centered inside it
+    level: float = None            # 0.0-1.0 fill fraction to render as a liquid level; None = no fill drawn
 
 
 @dataclass
@@ -238,7 +239,7 @@ def build_diagram():
 
     vessels = {
         "TRAP": Vessel("TRAP", "TRAP", 1080, 570, 60, 45),
-        "TANK": Vessel("TANK", "MIXTURE TANK", 1180, 700, 80, 150, label_outside=True),
+        "TANK": Vessel("TANK", "MIXTURE TANK", 1180, 700, 80, 150, label_outside=True, level=1.0),
     }
 
     gauges = {
@@ -621,6 +622,7 @@ SOP_STEPS = [
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
         "pipes": {"TANK_OUTLET_DOWN": "forward"},
         "gauges": {"P1": "1.80E-5"},
+        "vessels": {"TANK": 0.95},
         "flow": "0.00",
     },
     {
@@ -637,6 +639,7 @@ SOP_STEPS = [
         "pipes": {"TANK_OUTLET_DOWN": "forward"},
         # P5 decreasing is the SOP's own signal that phase separation is complete.
         "gauges": {"P1": "1.80E-5", "P5": "3.25E+2"},
+        "vessels": {"TANK": 0.55},
         "flow": "0.00",
     },
     {
@@ -669,6 +672,7 @@ SOP_STEPS = [
         # dropping as mixture condenses back in; Flow is now nonzero since
         # circulation is actually running (previously stuck at "0.00").
         "gauges": {"P1": "1.80E-5", "P3": "4.85E+2", "P5": "1.10E+2"},
+        "vessels": {"TANK": 0.12},
         "flow": "0.24",
     },
 ]
@@ -683,6 +687,7 @@ def snapshot_from_step(step):
         "pipes":  step.get("pipes", {}),
         "flow":   step.get("flow", "0.00"),
         "gauges": step.get("gauges", {}),
+        "vessels": step.get("vessels", {}),
     }
 
 
@@ -703,6 +708,10 @@ def apply_snapshot(snap):
     # is touched) simply hold their prior reading rather than resetting.
     for gid, g in st.session_state.gauges.items():
         g.value = snap.get("gauges", {}).get(gid, g.value)
+    # Vessel fill levels (e.g. mixture tank) carry forward like gauges do,
+    # so the tank only changes when a step explicitly says it should.
+    for vid, v in st.session_state.vessels.items():
+        v.level = snap.get("vessels", {}).get(vid, v.level)
 
 
 def init_state():
@@ -763,6 +772,28 @@ def draw_vessel_box(ax, v: Vessel):
     box = FancyBboxPatch((v.x, v.y), v.w, v.h, boxstyle="round,pad=0,rounding_size=7",
                           facecolor="none", edgecolor=INK, linewidth=1.7, zorder=3)
     ax.add_patch(box)
+
+    # Liquid-level fill for vessels that track one (e.g. the mixture tank),
+    # filled from the bottom up and clipped to the rounded box outline so
+    # it never pokes out past the corners. The percentage reading sits in
+    # the box's own center — free real estate once the name label moves
+    # outside (see label_outside) — rather than below the box, where it'd
+    # crowd TANK_V.
+    if v.level is not None:
+        level = max(0.0, min(1.0, v.level))
+        fill_h = v.h * level
+        if fill_h > 0:
+            fill = Rectangle((v.x, v.y + v.h - fill_h), v.w, fill_h,
+                              facecolor=FLOW, alpha=0.16, edgecolor="none", zorder=2)
+            fill.set_clip_path(box)
+            ax.add_patch(fill)
+            if level < 1.0:
+                ax.plot([v.x, v.x + v.w], [v.y + v.h - fill_h] * 2,
+                         color=FLOW, lw=1.4, alpha=0.6, zorder=2, solid_capstyle="butt")
+        ax.text(v.x + v.w / 2, v.y + v.h / 2, f"{level * 100:.0f}%",
+                color=FLOW, family=MONO, fontsize=11, weight="bold",
+                ha="center", va="center", zorder=5)
+
     if v.label_outside:
         ax.text(v.x + v.w / 2, v.y - 8, v.label, color=INK, family=MONO,
                  fontsize=9, weight="bold", ha="center", va="bottom", zorder=4)
