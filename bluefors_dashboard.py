@@ -111,6 +111,10 @@ class Pipe:
     label: str
     points: list
     state: str = "off"             # "off" | "forward" | "reverse"
+    bold: bool = False             # True for large-bore trunk lines (e.g. Turbo1->Scroll1
+                                    # foreline) that are physically thicker tubing and are
+                                    # drawn heavier than regular lines *regardless* of
+                                    # whether they're currently flowing or idle.
 
     def cycle(self):
         self.state = {"off": "forward", "forward": "reverse", "reverse": "off"}[self.state]
@@ -254,20 +258,19 @@ def build_diagram():
         "P2_TAP":         Pipe("P2_TAP",         "P2 tap",                [(560, 230), (560, 140), (460, 140)]),
 
         # --- V1 / V2 / V3 / TURBO1 ---
-        "STILL_TO_V1":    Pipe("STILL_TO_V1",    "Still line to V1",      [(650, 80), (650, 208)]),
-        "V1_TO_MAIN":     Pipe("V1_TO_MAIN",     "V1 bottom to main node",[(650, 252), (650, 230)]),
+        "STILL_TO_V1":    Pipe("STILL_TO_V1",    "Still line to V1",      [(650, 80), (650, 208)], bold=True),
+        "V1_TO_MAIN":     Pipe("V1_TO_MAIN",     "V1 bottom to main node",[(650, 252), (650, 230)], bold=True),
         "V1_TO_V2":       Pipe("V1_TO_V2",       "V1 to V2",              [(650, 230), (738, 230)]),
         "V2_TO_V3":       Pipe("V2_TO_V3",       "V2 down to V3",         [(782, 230), (830, 230), (830, 308)]),
         "V1_V2_BYPASS":   Pipe("V1_V2_BYPASS",   "V1/V2 bypass",          [(650, 195), (830, 195), (830, 230)]),
         "V3_TO_MAINLINE": Pipe("V3_TO_MAINLINE", "V3 to main line",       [(830, 352), (830, 470), (1010, 470)]),
-        "TURBO1_INTAKE":  Pipe("TURBO1_INTAKE",  "Turbo 1 intake",        [(650, 252), (650, 318)]),
-        "TURBO1_EXHAUST": Pipe("TURBO1_EXHAUST", "Turbo 1 exhaust (upper)", [(650, 382), (650, 470)]),
+        "TURBO1_INTAKE":  Pipe("TURBO1_INTAKE",  "Turbo 1 intake",        [(650, 252), (650, 318)], bold=True),
         "MAIN_OVERPASS":  Pipe("MAIN_OVERPASS",  "Main line overpass",    [(500, 470), (1010, 470)]),
 
         # --- 3-He / V4 / FLOW / COM ---
-        "HE3_IN":         Pipe("HE3_IN",         "3-He in",               [(1010, 80), (1010, 228)]),
+        "HE3_IN":         Pipe("HE3_IN",         "3-He in",               [(1010, 80), (1010, 228)], bold=True),
         "P3_TAP":         Pipe("P3_TAP",         "P3 tap",                [(1010, 140), (948, 140)]),
-        "V4_TO_FLOW":     Pipe("V4_TO_FLOW",     "V4 to flow to main",    [(1010, 272), (1010, 470)]),
+        "V4_TO_FLOW":     Pipe("V4_TO_FLOW",     "V4 to flow to main",    [(1010, 272), (1010, 470)], bold=True),
         "V5_TAP":         Pipe("V5_TAP",         "V5 tap",                [(1010, 190), (1083, 190)]),
         "V5_BPV1_TOP":    Pipe("V5_BPV1_TOP",    "V5 to BPV1 (top)",      [(1127, 190), (1180, 190)]),
         "V5COM_TOP_DOWN": Pipe("V5COM_TOP_DOWN", "V5/COM top node to COM",[(1180, 190), (1180, 222)]),
@@ -277,14 +280,14 @@ def build_diagram():
         "BPV1_BYPASS":    Pipe("BPV1_BYPASS",    "BPV1 bypass around COM",[(1180, 190), (1255, 190), (1255, 325), (1180, 325)]),
 
         # --- MAIN / TRAP / V7 / V8 / V9 ---
-        "MAIN_FROM_FLOW": Pipe("MAIN_FROM_FLOW", "Main line from flow",   [(1010, 470), (1010, 488)]),
+        "MAIN_FROM_FLOW": Pipe("MAIN_FROM_FLOW", "Main line from flow",   [(1010, 470), (1010, 488)], bold=True),
         "V7_TO_TRAP_TAP": Pipe("V7_TO_TRAP_TAP", "V7 branch to trap",     [(1010, 470), (1110, 470), (1110, 488)]),
         "V7_DOWN_TO_TRAP":Pipe("V7_DOWN_TO_TRAP","V7 down to trap",       [(1110, 532), (1110, 570)]),
         "TRAP_TO_V9":     Pipe("TRAP_TO_V9",     "Trap to V9",            [(1110, 615), (1110, 638)]),
         "V9_TO_MAIN":     Pipe("V9_TO_MAIN",     "V9 to main node",       [(1110, 682), (1110, 710), (1010, 710)]),
-        "V8_GAP_PLAIN":   Pipe("V8_GAP_PLAIN",   "Plain run above V8",    [(1010, 488), (1010, 500)]),
-        "V8_MAIN_PATH":   Pipe("V8_MAIN_PATH",   "V8 main path",          [(1010, 500), (1010, 525)]),
-        "V8_DOWN_CONT":   Pipe("V8_DOWN_CONT",   "V8 down, continuing",   [(1010, 575), (1010, 760)]),
+        "V8_GAP_PLAIN":   Pipe("V8_GAP_PLAIN",   "Plain run above V8",    [(1010, 488), (1010, 500)], bold=True),
+        "V8_MAIN_PATH":   Pipe("V8_MAIN_PATH",   "V8 main path",          [(1010, 500), (1010, 525)], bold=True),
+        "V8_DOWN_CONT":   Pipe("V8_DOWN_CONT",   "V8 down, continuing",   [(1010, 575), (1010, 760)], bold=True),
         "P4_TAP":         Pipe("P4_TAP",         "P4 tap",                [(1010, 615), (905, 615)]),
 
         # --- BACKING MANIFOLD ---
@@ -301,14 +304,14 @@ def build_diagram():
         "V22_UP":         Pipe("V22_UP",         "V22 up branch",         [(300, 700), (300, 738)]),
 
         # --- TURBO 1 EXHAUST / V18 ---
-        "TURBO1_EXH_DOWN":Pipe("TURBO1_EXH_DOWN","Turbo 1 exhaust down",  [(650, 382), (650, 700)]),
+        "TURBO1_EXH_DOWN":Pipe("TURBO1_EXH_DOWN","Turbo 1 exhaust down",  [(650, 382), (650, 700)], bold=True),
         "MANIFOLD_TO_V18":Pipe("MANIFOLD_TO_V18","Manifold enters V18",   [(600, 700), (578, 700)]),
         "V18_TO_EXH_NODE":Pipe("V18_TO_EXH_NODE","V18 to exhaust node",   [(622, 700), (650, 700)]),
-        "EXH_TO_V10":     Pipe("EXH_TO_V10",     "Exhaust to V10",        [(650, 700), (650, 760), (708, 760)]),
+        "EXH_TO_V10":     Pipe("EXH_TO_V10",     "Exhaust to V10",        [(650, 700), (650, 760), (708, 760)], bold=True),
 
         # --- SCROLL 1 ---
-        "V10_TO_SCROLL1": Pipe("V10_TO_SCROLL1", "V10 to Scroll 1",       [(752, 760), (868, 760)]),
-        "SCROLL1_TO_P4N": Pipe("SCROLL1_TO_P4N", "Scroll 1 outlet to P4 node", [(932, 760), (1010, 760)]),
+        "V10_TO_SCROLL1": Pipe("V10_TO_SCROLL1", "V10 to Scroll 1",       [(752, 760), (868, 760)], bold=True),
+        "SCROLL1_TO_P4N": Pipe("SCROLL1_TO_P4N", "Scroll 1 outlet to P4 node", [(932, 760), (1010, 760)], bold=True),
         "BPV2_UPPER":     Pipe("BPV2_UPPER",     "BPV2 bypass (upper)",   [(650, 700), (650, 650), (778, 650)]),
         "BPV2_LOWER":     Pipe("BPV2_LOWER",     "BPV2 bypass (lower)",   [(822, 650), (960, 650), (960, 760)]),
 
@@ -441,7 +444,7 @@ SOP_STEPS = [
         "panels": {},
         "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
                   "MANIFOLD_TO_V18": "forward", "V18_TO_EXH_NODE": "forward", "EXH_TO_V10": "forward",
-                  "TURBO1_INTAKE": "forward", "TURBO1_EXHAUST": "forward",
+                  "TURBO1_INTAKE": "forward", "TURBO1_EXH_DOWN": "forward",
                   "V1_TO_MAIN": "forward", "V3_TO_MAINLINE": "forward", "V4_TO_FLOW": "forward"},
         "gauges": {"P6": "6.20E-2"},
         "flow": "0.00",
@@ -501,7 +504,7 @@ SOP_STEPS = [
         "panels": {},
         "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
                   "VACCAN_TOP": "forward", "V14_TO_V15": "forward", "V15_TO_MAIN": "forward",
-                  "TURBO1_INTAKE": "forward", "TURBO1_EXHAUST": "forward",
+                  "TURBO1_INTAKE": "forward",
                   "MAIN_OVERPASS": "forward", "TURBO1_EXH_DOWN": "forward",
                   "MANIFOLD_TO_V18": "forward", "V18_TO_EXH_NODE": "forward"},
         "gauges": {"P1": "8.70E-4"},
@@ -515,7 +518,7 @@ SOP_STEPS = [
         "panels": {},
         "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
                   "VACCAN_TOP": "forward", "V14_TO_V15": "forward", "V15_TO_MAIN": "forward",
-                  "TURBO1_INTAKE": "forward", "TURBO1_EXHAUST": "forward",
+                  "TURBO1_INTAKE": "forward",
                   "MAIN_OVERPASS": "forward", "TURBO1_EXH_DOWN": "forward",
                   "MANIFOLD_TO_V18": "forward", "V18_TO_EXH_NODE": "forward"},
         "gauges": {"P1": "2.00E-3"},
@@ -538,7 +541,7 @@ SOP_STEPS = [
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
         "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
                   "VACCAN_TOP": "forward", "V14_TO_V15": "forward", "V15_TO_MAIN": "forward",
-                  "TURBO1_INTAKE": "forward", "TURBO1_EXHAUST": "forward",
+                  "TURBO1_INTAKE": "forward",
                   "MAIN_OVERPASS": "forward", "TURBO1_EXH_DOWN": "forward",
                   "MANIFOLD_TO_V18": "forward", "V18_TO_EXH_NODE": "forward"},
         "gauges": {"P1": "4.10E-5"},
@@ -599,7 +602,7 @@ SOP_STEPS = [
         "pumps": {"SCROLL1": True, "TURBO1": True},
         "panels": {"PULSE_TUBE": True, "EXT": True},
         "pipes": {"TANK_OUTLET_DOWN": "forward", "TURBO1_INTAKE": "forward",
-                  "TURBO1_EXHAUST": "forward", "V1_TO_MAIN": "forward",
+                  "TURBO1_EXH_DOWN": "forward", "V1_TO_MAIN": "forward",
                   "HE3_IN": "forward", "V4_TO_FLOW": "forward",
                   "V7_TO_TRAP_TAP": "forward", "V7_DOWN_TO_TRAP": "forward",
                   "TRAP_TO_V9": "forward", "V9_TO_MAIN": "forward",
@@ -775,7 +778,12 @@ def draw_pipe(ax, pipe: Pipe):
     ys = [pt[1] for pt in pipe.points]
     flowing = pipe.state != "off"
     color = FLOW if flowing else LINE_IDLE
-    lw = 3.2 if flowing else 1.9
+    # Bold trunk lines (large-bore tubing, e.g. the Turbo1->Scroll1 foreline) are drawn
+    # heavier than regular lines whether or not they're currently flowing.
+    if pipe.bold:
+        lw = 4.2 if flowing else 3.2
+    else:
+        lw = 3.2 if flowing else 1.9
     ax.plot(xs, ys, color=color, lw=lw, solid_capstyle="round", zorder=2)
     if flowing:
         a, b = (pipe.points[-2], pipe.points[-1]) if pipe.state == "forward" \
