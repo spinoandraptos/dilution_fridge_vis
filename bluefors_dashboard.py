@@ -153,7 +153,7 @@ class Pipe:
 # pipe network).
 JUNCTIONS = [
     (560, 230), (650, 195), (1010, 140), (1010, 190), (1180, 190),
-    (1010, 325), (1180, 325), (1010, 710), (1010, 680), (100, 700),
+    (1010, 325), (1180, 325), (1010, 710), (1010, 680),
     (790, 760), (790, 840), (1060, 930), (1220, 930), (150, 800),
     (300, 230), (650, 230), (830, 470), (1010, 470), (1010, 760),
     (1010, 930), (500, 700), (650, 700), (150, 700), (300, 700), (400, 700),
@@ -246,8 +246,8 @@ def build_diagram():
         # Nudged right from x=150 so the (now-larger) gauge box clears the
         # PULSE TUBE panel box directly beneath it (panel spans x=20-95).
         "P1": Gauge("P1", "P1", 180,  140, ""),
-        "P2": Gauge("P2", "P2", 500,  140, "8.60E-1"),
-        "P3": Gauge("P3", "P3", 950,  140, "6.14E+0"),
+        "P2": Gauge("P2", "P2", 460,  140, "8.60E-1"),
+        "P3": Gauge("P3", "P3", 910,  140, "6.14E+0"),
         "P4": Gauge("P4", "P4", 905,  615, "1.64E+2"),
         "P5": Gauge("P5", "P5", 1100, 985, "8.11E+2"),
         "P6": Gauge("P6", "P6", 30,   700, "5.08E-1"),
@@ -312,7 +312,7 @@ def build_diagram():
         "V14_TO_V16":     Pipe("V14_TO_V16",     "TEST tee down to V16",  [(300, 330), (300, 598)]),
         "V14_TO_V15":     Pipe("V14_TO_V15",     "V14 to V15",            [(300, 202), (300, 230), (478, 230)]),
         "V15_TO_MAIN":    Pipe("V15_TO_MAIN",    "V15 to main node",      [(522, 230), (650, 230)]),
-        "P2_TAP":         Pipe("P2_TAP",         "P2 tap",                [(560, 230), (560, 140), (500, 140)]),
+        "P2_TAP":         Pipe("P2_TAP",         "P2 tap",                [(560, 230), (560, 140), (460, 140)]),
 
         # --- V1 / V2 / V3 / TURBO1 ---
         "STILL_TO_V1":    Pipe("STILL_TO_V1",    "Still line to V1",      [(650, 80), (650, 208)]),
@@ -327,7 +327,7 @@ def build_diagram():
 
         # --- 3-He / V4 / FLOW / COM ---
         "HE3_IN":         Pipe("HE3_IN",         "3-He in",               [(1010, 80), (1010, 228)]),
-        "P3_TAP":         Pipe("P3_TAP",         "P3 tap",                [(1010, 140), (988, 140)]),
+        "P3_TAP":         Pipe("P3_TAP",         "P3 tap",                [(1010, 140), (948, 140)]),
         "V4_TO_FLOW":     Pipe("V4_TO_FLOW",     "V4 to flow to main",    [(1010, 272), (1010, 470)]),
         "V5_TAP":         Pipe("V5_TAP",         "V5 tap",                [(1010, 190), (1083, 190)]),
         "V5_BPV1_TOP":    Pipe("V5_BPV1_TOP",    "V5 to BPV1 (top)",      [(1127, 190), (1180, 190)]),
@@ -818,7 +818,7 @@ def draw_gauge(ax, g: Gauge):
 
 
 def draw_flow_box(ax, f: FlowBox):
-    ax.text(f.cx - 86, f.cy, "FLOW", color=INK, family=MONO, fontsize=11,
+    ax.text(f.cx - 100, f.cy, "FLOW", color=INK, family=MONO, fontsize=11,
             weight="bold", ha="left", va="center", zorder=5)
     w, h = 92, 38
     box = Rectangle((f.cx - w / 2, f.cy - h / 2), w, h,
