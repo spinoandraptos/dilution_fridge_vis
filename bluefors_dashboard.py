@@ -346,34 +346,56 @@ def build_diagram():
 # =====================================================================
 
 SOP_STEPS = [
-    # ---------------- Section 2: Full Cooldown Preparation ----------------
+    # ============== Section 1.1-1.2: Checks & Retrieve Residual Mixture ==============
     {
-        "name": "2.1-4  Pre-checks",
-        "note": "SOP §2 steps 1-4. Check all heaters/sensors are functioning. Check radiation "
-                "shields are mounted with correct orientation (stickers matching) and tightened "
-                "hand-tight. Close the vacuum can — o-rings and o-ring surfaces must be clean and "
-                "greased. On pumpdown the wing-nuts will loosen; do NOT re-tighten them.",
+        "name": "1.1  System checks before cooling down",
+        "note": "SOP §1.1. Ideally done while preparing devices for cool-down. Check cooling "
+                "water is filled, cold trap is clean enough, and no screws or tools are left "
+                "inside the fridge. Check that all required heaters and sensors are set "
+                "appropriately and functioning. Close the cans with seams matching — o-rings "
+                "and o-ring surfaces must be clean and greased, especially with no hair; use "
+                "about half a pea size of grease.",
         "valves": {}, "pumps": {}, "panels": {}, "pipes": {},
         "gauges": {"P1": "", "P2": "8.60E-1", "P3": "6.14E+0", "P4": "1.64E+2",
                    "P5": "8.11E+2", "P6": "5.08E-1"},
         "flow": "0.00",
     },
     {
-        "name": "2.5  Confirm DR isolated",
-        "note": "SOP §2 step 5. Before evacuating: (a) all DR-circulation valves V1-V13 closed, "
-                "no pumping path to the mixture tank; (b) mixture tank manual valve (TANK_V) should "
-                "be CLOSED while the system is not running — it MUST be OPEN once the fridge is "
-                "running. Also confirm all 3He/4He mixture has already been collected, none left in "
-                "the DR or cold trap.",
-        "valves": {}, "pumps": {}, "panels": {}, "pipes": {},
-        "gauges": {"P2": "8.60E-1", "P3": "6.14E+0", "P4": "1.64E+2",
-                   "P5": "8.11E+2", "P6": "5.08E-1"},
+        "name": "1.2 steps 1-2  Retrieve residual mixture — circulate",
+        "note": "SOP §1.2. Motivation: retrieve any residual mixture that accumulated in the "
+                "circulation line — if skipped, this leads to mixture loss over time. Make sure "
+                "all valves are closed, especially the manual (tank) valve. Turn on Scroll1, "
+                "open V13 and V10, open V2 to equalize the pressure over V1. Wait a while, then "
+                "open V1, V3 and V4.",
+        "valves": {"V13": True, "V10": True, "V2": True, "V1": True, "V3": True, "V4": True},
+        "pumps": {"SCROLL1": True},
+        "panels": {},
+        "pipes": {"V1_TO_MAIN": "forward", "V1_TO_V2": "forward", "V2_TO_V3": "forward",
+                  "V3_TO_MAINLINE": "forward", "V4_TO_FLOW": "forward", "MAIN_OVERPASS": "forward",
+                  "TURBO1_EXH_DOWN": "forward", "EXH_TO_V10": "forward",
+                  "V10_TO_SCROLL1": "forward", "SCROLL1_TO_P4N": "forward",
+                  "SCROLL1_V13_TEE": "forward", "V13_DOWN": "forward"},
+        "gauges": {"P2": "6.20E-1", "P3": "5.40E-1"},
         "flow": "0.00",
     },
     {
-        "name": "2.6  Evacuate service manifold",
-        "note": "SOP §2 step 6. Start Scroll2, wait 10s for the internal relay to switch, then open "
-                "V21 to evacuate the service manifold.",
+        "name": "1.2 steps 3-5  Stabilize & isolate progressively",
+        "note": "SOP §1.2 steps 3-5. Continue until pressures stabilize: P3 should read ~0, P2 "
+                "in the low e-2 to e-3 mbar range, and P4/P5 around 760-770 mbar (~30-60 min). "
+                "Then close V4, V3, V1, V2, V10, Scroll1 and V13 in that order, pumping "
+                "progressively smaller sections — note the values in the cool-down notes on "
+                "Notion. If planning to clean the cold trap, see SOP §3.2 for additional steps "
+                "first.",
+        "valves": {}, "pumps": {}, "panels": {}, "pipes": {},
+        "gauges": {"P2": "4.50E-2", "P3": "0.00E+0", "P4": "7.65E+2", "P5": "7.62E+2"},
+        "flow": "0.00",
+    },
+
+    # ==================== Section 1.3: Evacuate DU and the lines ====================
+    {
+        "name": "1.3 step 1  Evacuate service manifold",
+        "note": "SOP §1.3 step 1. Start Scroll2, wait 10 s for the internal relay to switch, "
+                "then open V21 to evacuate the service manifold.",
         "valves": {"V21": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
@@ -383,10 +405,11 @@ SOP_STEPS = [
         "flow": "0.00",
     },
     {
-        "name": "2.7-9  Open gate valve V1",
-        "note": "SOP §2 steps 7-9. Open V2 to equalize pressure across gate valve V1. CAUTION: V1 "
-                "must NOT be operated with a pressure difference >30 mbar across it — this can "
-                "damage the valve. Once equalized, open V1.",
+        "name": "1.3 steps 2-3  Equalize & open gate valve V1",
+        "note": "SOP §1.3 steps 2-3. Open V2 to equalize the pressure over gate valve V1. "
+                "CAUTION: gate valve V1 must NOT be operated when the pressure difference "
+                "is >30 mbar — this can result in damage. Wait a few seconds for the pressure "
+                "to equalize, then open gate valve V1 and close V2.",
         "valves": {"V21": True, "V2": True, "V1": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
@@ -396,9 +419,9 @@ SOP_STEPS = [
         "flow": "0.00",
     },
     {
-        "name": "2.10  Connect condensing & pumping sides",
-        "note": "SOP §2 step 10. Open V3 and V4 to connect the condensing side and pumping side of "
-                "the DR.",
+        "name": "1.3 step 4  Connect condensing & pumping sides",
+        "note": "SOP §1.3 step 4. Open V3 and V4 to connect the condensing and pumping side of "
+                "the dilution unit (DU).",
         "valves": {"V21": True, "V2": True, "V1": True, "V3": True, "V4": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
@@ -409,140 +432,138 @@ SOP_STEPS = [
         "flow": "0.00",
     },
     {
-        "name": "2.11  Pre-pump cold trap separately (recommended)",
-        "note": "SOP §2 step 11. Engineer-recommended alternative to opening V7 directly: to keep "
-                "dirt in the trap from contaminating the dilution unit, first CLOSE V1, V2, V3, V4, "
-                "then open V17 and V7 and pump ~5 min (up to 1 hr if the trap hasn't been cleaned in "
-                "a while). Watch P6 — it should not rise much. A heat gun may gently warm the trap "
-                "during cleaning, max 100°C.",
-        "valves": {"V21": True, "V17": True, "V7": True},
-        "pumps": {"SCROLL2": True},
-        "panels": {},
-        "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
-                  "V17_UPPER_BRANCH": "forward", "V17_TO_MANIFOLD": "forward",
-                  "V7_TO_TRAP_TAP": "forward", "V7_DOWN_TO_TRAP": "forward"},
-        "gauges": {"P6": "2.85E+0"},
-        "flow": "0.00",
-    },
-    {
-        "name": "2.12  Evacuate DR, merge with service manifold",
-        "note": "SOP §2 step 12. Open V18 to connect the service manifold with the DR circulation "
-                "circuit. Re-open V2, V1, V3 and V4; close V17 now that the trap has been pumped "
-                "separately.",
-        "valves": {"V21": True, "V18": True, "V2": True, "V1": True, "V3": True, "V4": True, "V7": True},
-        "pumps": {"SCROLL2": True},
-        "panels": {},
-        "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
-                  "MANIFOLD_TO_V18": "forward", "V18_TO_EXH_NODE": "forward",
-                  "V1_TO_MAIN": "forward", "V1_TO_V2": "forward", "V2_TO_V3": "forward",
-                  "V3_TO_MAINLINE": "forward", "V4_TO_FLOW": "forward",
-                  "V7_TO_TRAP_TAP": "forward", "V7_DOWN_TO_TRAP": "forward"},
-        "gauges": {"P6": "1.15E+0"},
-        "flow": "0.00",
-    },
-    {
-        "name": "2.13-14  Start Turbo1",
-        "note": "SOP §2 steps 13-14. Wait for P6 < 1 mbar, then start Turbo1. Wait 15 min — or "
-                "pump overnight if the dilution unit was ever exposed to air.",
-        "valves": {"V21": True, "V18": True, "V2": True, "V1": True, "V3": True, "V4": True, "V7": True},
+        "name": "1.3 steps 5-7  Evacuate DU with Turbo1",
+        "note": "SOP §1.3 steps 5-7. Open V18 to connect the service manifold with the DU "
+                "circulation circuit, evacuating the dilution unit. Wait for P6 < 1 mbar, then "
+                "start Turbo1. Pump for 15 minutes to an hour.",
+        "valves": {"V21": True, "V1": True, "V3": True, "V4": True, "V18": True},
         "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {},
         "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
                   "MANIFOLD_TO_V18": "forward", "V18_TO_EXH_NODE": "forward", "EXH_TO_V10": "forward",
                   "TURBO1_INTAKE": "forward", "TURBO1_EXHAUST": "forward",
-                  "V1_TO_MAIN": "forward", "V1_TO_V2": "forward", "V2_TO_V3": "forward",
-                  "V3_TO_MAINLINE": "forward", "V4_TO_FLOW": "forward",
-                  "V7_TO_TRAP_TAP": "forward", "V7_DOWN_TO_TRAP": "forward"},
+                  "V1_TO_MAIN": "forward", "V3_TO_MAINLINE": "forward", "V4_TO_FLOW": "forward"},
         "gauges": {"P6": "6.20E-2"},
         "flow": "0.00",
     },
     {
-        "name": "2.15-16  Shut down, insert cold trap in LN2",
-        "note": "SOP §2 steps 15-16. Close all valves and switch off all pumps. Insert the cold "
-                "trap into the LN2 dewar.",
+        "name": "1.3 step 8  Close all valves and pumps",
+        "note": "SOP §1.3 step 8. Close all valves and switch off all pumps.",
         "valves": {}, "pumps": {}, "panels": {}, "pipes": {},
         "gauges": {"P6": "6.20E-2"},
         "flow": "0.00",
     },
     {
-        "name": "2.17  Verify condensing pressures",
-        "note": "SOP §2 step 17. Before starting the cooldown procedure, both still (P2) and "
-                "condensing (P3) pressures must read <1 mbar after evacuation — open V2 briefly to "
-                "check.",
-        "valves": {"V2": True},
-        "pumps": {}, "panels": {},
-        "pipes": {"P2_TAP": "forward"},
-        "gauges": {"P2": "7.40E-1", "P3": "8.90E-1", "P6": "6.20E-2"},
+        "name": "1.3 step 9  Open manual valve to the tank",
+        "note": "SOP §1.3 step 9. Open the manual valve to the tank.",
+        "valves": {"TANK_V": True},
+        "pumps": {}, "panels": {}, "pipes": {},
+        "gauges": {"P6": "6.20E-2"},
+        "flow": "0.00",
+    },
+    {
+        "name": "1.3 steps 10-11  Check P4 in Cooldown database",
+        "note": "SOP §1.3 steps 10-11. Make sure V10, V8 and V9 are off. Open Scroll 1 and V13, "
+                "wait 10 sec, and check P4 — it should read 760 ± 5 mbar. Note down P4 and P5 in "
+                "the Cooldown database, then close V13 and turn off Scroll 1.",
+        "valves": {"TANK_V": True, "V13": True},
+        "pumps": {"SCROLL1": True},
+        "panels": {},
+        "pipes": {"SCROLL1_V13_TEE": "forward", "V13_DOWN": "forward",
+                  "RUN_TO_TANKLINE": "forward", "TANKLINE_TO_TANK": "forward",
+                  "TANK_OUTLET_DOWN": "forward"},
+        "gauges": {"P4": "7.60E+2", "P5": "7.61E+2"},
         "flow": "0.00",
     },
 
-    # ---------------------- Section 3: Cooldown ----------------------
+    # ========================= Section 1.4: Evacuate vacuum can =========================
     {
-        "name": "3.1a  Evacuate VC — rough pump",
-        "note": "SOP §3.1 steps 1-2. Start VC evacuation: switch on Scroll2, wait 10s for the "
-                "internal relay. Open V21, V16 and V14 to rough-pump the vacuum can; open V23. "
-                "Target: P1 < 5e-2 mbar with the magnet installed, or < 5e-3 mbar without, at room "
-                "temperature, before starting the pulse tube.",
-        "valves": {"V21": True, "V16": True, "V14": True, "V23": True},
+        "name": "1.4 steps 1-3  Rough pump VC",
+        "note": "SOP §1.4. Goal: evacuate the vacuum can (VC) until P1 ≲ 2×10⁻³ mbar "
+                "(typically ~1.5 hrs). The wing nuts will become loose once the VC is under "
+                "vacuum — do NOT retighten them. Switch on Scroll2, wait 10 s for the internal "
+                "relay, then open V21, V16 and V14 to rough-pump the VC. Turn on the P1 gauge "
+                "once P6 < 1 mbar (after ~15 min).",
+        "valves": {"V21": True, "V16": True, "V14": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
         "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
-                  "V16_TO_MANIFOLD": "forward", "VACCAN_TOP": "forward", "V14_TO_V16": "forward",
-                  "SCROLL2_TAP_V23": "forward"},
+                  "V16_TO_MANIFOLD": "forward", "VACCAN_TOP": "forward", "V14_TO_V16": "forward"},
         "gauges": {"P1": "3.20E+1"},
         "flow": "0.00",
     },
     {
-        "name": "3.1b  Evacuate VC — switch to Turbo2",
-        "note": "SOP §3.1 steps 3-4. Once P1 < 1 mbar: close V21; open V23 and V22; open V18 and "
-                "V15; switch on Turbo2. Pump until P1 < 2e-3 mbar.",
-        "valves": {"V16": True, "V14": True, "V23": True, "V22": True, "V18": True, "V15": True},
-        "pumps": {"SCROLL2": True, "TURBO2": True},
+        "name": "1.4 steps 4-5  Switch to Turbo1",
+        "note": "SOP §1.4 steps 4-5. Close V16; open V18 and V15; switch on Turbo1. Pump until "
+                "P1 ≲ 2×10⁻³ mbar (~1-2 hrs).",
+        "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
+        "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {},
-        "pipes": {"V16_TO_MANIFOLD": "forward", "BACKING_MANIFOLD": "forward",
-                  "VACCAN_TOP": "forward", "V14_TO_V16": "forward", "SCROLL2_TAP_V23": "forward",
-                  "V22_TO_TURBO2": "forward", "V15_TO_MAIN": "forward",
+        "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
+                  "VACCAN_TOP": "forward", "V14_TO_V15": "forward", "V15_TO_MAIN": "forward",
+                  "TURBO1_INTAKE": "forward", "TURBO1_EXHAUST": "forward",
+                  "MAIN_OVERPASS": "forward", "TURBO1_EXH_DOWN": "forward",
                   "MANIFOLD_TO_V18": "forward", "V18_TO_EXH_NODE": "forward"},
         "gauges": {"P1": "8.70E-4"},
         "flow": "0.00",
     },
     {
-        "name": "3.2a  Precool with pulse tubes",
-        "note": "SOP §3.2. Ensure PT water cooling is running at the correct level (5 L/min). "
-                "Ensure heat switches HS-STILL and HS-MC are 'on' (the automated scripts do this). "
-                "Ensure the heater-box batteries are fully charged, or the charger is plugged in. "
-                "This stage takes 10-12 hours without a magnet (longer with one) to reach ~10 K.",
-        "valves": {"V16": True, "V14": True, "V23": True, "V22": True, "V18": True, "V15": True},
-        "pumps": {"SCROLL2": True, "TURBO2": True},
+        "name": "1.4 step 6  Leak check",
+        "note": "SOP §1.4 step 6. Leak-check if anything on top of the fridge changed.",
+        "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
+        "pumps": {"SCROLL2": True, "TURBO1": True},
+        "panels": {},
+        "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
+                  "VACCAN_TOP": "forward", "V14_TO_V15": "forward", "V15_TO_MAIN": "forward",
+                  "TURBO1_INTAKE": "forward", "TURBO1_EXHAUST": "forward",
+                  "MAIN_OVERPASS": "forward", "TURBO1_EXH_DOWN": "forward",
+                  "MANIFOLD_TO_V18": "forward", "V18_TO_EXH_NODE": "forward"},
+        "gauges": {"P1": "2.00E-3"},
+        "flow": "0.00",
+    },
+
+    # ======================= Section 1.5: Precool with Pulse Tube =======================
+    {
+        "name": "1.5 steps 1-2  Start pulse tube & heat switches",
+        "note": "SOP §1.5. Goal: precool the system (4K, still and MXC stages) to below 4 K "
+                "(~24 hrs) — or to 15 K if starting the Pulse Pre-Cool script afterwards. Make "
+                "sure the Bluefors temperature controller, reader and logging are running. Set "
+                "the Still Heater power to 6 mW and Relay Mode to SHORT (0 in the "
+                "configuration — heater OFF); the panel shows grey with a blue toggle, "
+                "switchable from software. Turn on the Pulse Tube and the two Heat Switches "
+                "(HS-Still, HS-MC); monitor for 10-15 min — compressor output water should "
+                "stay ≤40°C, current around 11-14 A.",
+        "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
+        "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
-        "pipes": {"V16_TO_MANIFOLD": "forward", "BACKING_MANIFOLD": "forward",
-                  "VACCAN_TOP": "forward", "V14_TO_V16": "forward", "SCROLL2_TAP_V23": "forward",
-                  "V22_TO_TURBO2": "forward", "V15_TO_MAIN": "forward",
+        "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
+                  "VACCAN_TOP": "forward", "V14_TO_V15": "forward", "V15_TO_MAIN": "forward",
+                  "TURBO1_INTAKE": "forward", "TURBO1_EXHAUST": "forward",
+                  "MAIN_OVERPASS": "forward", "TURBO1_EXH_DOWN": "forward",
                   "MANIFOLD_TO_V18": "forward", "V18_TO_EXH_NODE": "forward"},
         "gauges": {"P1": "4.10E-5"},
         "flow": "0.00",
     },
     {
-        "name": "3.2b  Switch to cryopumps only",
-        "note": "SOP §3.2 step 4. After 30 hours have passed and P1 is below 3e-5 mbar, turn off "
-                "the backing/turbo pumps and rely on cryopumping only.",
-        "valves": {"V16": True, "V14": True, "V23": True, "V22": True, "V18": True, "V15": True},
-        "pumps": {},
+        "name": "1.5 step 3  Stop OVC pumping below 70 K",
+        "note": "SOP §1.5 step 3. Once all flanges are below 70 K (typically ~12 hrs), stop "
+                "pumping the outer vacuum can (OVC): close V14 first — always, in case of any "
+                "air inside the VC — then V15, V18 and V21. Turn off Scroll2 and Turbo1.",
+        "valves": {}, "pumps": {},
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
         "pipes": {},
         "gauges": {"P1": "1.80E-5"},
         "flow": "0.00",
     },
+
+    # ========================= Section 1.6: Pulse Pre-cooling (optional) =========================
     {
-        "name": "3.3  Pulse pre-cooling (optional)",
-        "note": "SOP §3.3. Optional but speeds up DR cooldown; optimal start T < 15 K. Ensure the "
-                "manual tank valve (TANK_V) is open, then run the pulse-precooling script (two "
-                "script variants exist — with/without magnet, with different wait times). NOT "
-                "recommended if air or other contamination is suspected in the mix or fridge lines, "
-                "as it may clog the fridge. Can be skipped by spending an extra ~10 hours precooling "
-                "instead (e.g. when a magnet must be cooled).",
-        "valves": {"V16": True, "V14": True, "V23": True, "V22": True, "V18": True, "V15": True,
-                    "TANK_V": True},
+        "name": "1.6  Pulse pre-cooling (optional)",
+        "note": "SOP §1.6. Optional step to decrease cooldown time; ideally started once the "
+                "4K, still and MXC stages are ≲15 K (typically 1.5-2 hrs) and Turbo1 rotates at "
+                "less than 100 Hz. Ensure the manual valve at the tank is open, then start PPC "
+                "by running Pulse_Pre_Cool_v1.24.",
+        "valves": {"TANK_V": True},
         "pumps": {},
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
         "pipes": {"TANK_OUTLET_DOWN": "forward"},
@@ -550,34 +571,33 @@ SOP_STEPS = [
         "vessels": {"TANK": 0.95},
         "flow": "0.00",
     },
+
+    # ========================== Section 1.7: Condensing Mixture ==========================
     {
-        "name": "3.4a  Condense mixture — begin",
-        "note": "SOP §3.4 step 1-2. Completion of pre-phase-separation cooling is indicated by "
-                "decreasing P5 on the mixture tank — at that point switch OFF heat switches "
-                "HS-STILL and HS-MC to break thermal contact between the DR and the pulse tube "
-                "(the scripts do this automatically). If P5 does NOT start decreasing, the fridge "
-                "is too hot: check the still temperature is ≲ 5 K, stop the condense script and "
-                "wait; if temperature won't drop, suspect excess heat load from experimental mass.",
-        "valves": {"TANK_V": True, "V18": True, "V15": True},
+        "name": "1.7 steps 1-2  Begin condensing",
+        "note": "SOP §1.7. Requires 4K, still and MXC below 4 K (typically 6 hrs). CRITICAL: "
+                "gate valve V1 must be open during normal operation — it's the only way for "
+                "the mixture to return to the tank! Ensure the manual valve at the tank is "
+                "open, then start condensing by running condense_wLN2_v1_24.",
+        "valves": {"TANK_V": True, "V1": True},
         "pumps": {},
-        "panels": {"PULSE_TUBE": True, "HS_STILL": False, "HS_MC": False},
-        "pipes": {"TANK_OUTLET_DOWN": "forward"},
+        "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
+        "pipes": {"TANK_OUTLET_DOWN": "forward", "V1_TO_MAIN": "forward"},
         "gauges": {"P1": "1.80E-5", "P5": "3.25E+2"},
         "vessels": {"TANK": 0.55},
         "flow": "0.00",
     },
     {
-        "name": "3.4b  Condense mixture — normal operation",
-        "note": "SOP §3.4 steps 3-6. Turbo1 starts automatically once P3 < 600 mbar — this "
-                "indicates normal operating mode and the system will cool to base. If the condense "
-                "script terminates prematurely with 'Needle Valve set too tight', just rerun it. "
-                "~20 min after Turbo1 starts, ~7 mW may be applied to the still heater (EXT) to "
-                "speed up cooldown if needed (toggle EXT manually if you're modeling that). "
-                "CRITICAL: verify gate valve V1 stays OPEN throughout normal operation.",
+        "name": "1.7 step 3  Still heater / EXT — normal operation",
+        "note": "SOP §1.7 step 3. The still heater should turn on automatically — check the EXT "
+                "toggle on the small screen of the Bluefors temperature control unit; it stays "
+                "grey until EXT is switched on. If it hasn't come on automatically, turn it on "
+                "manually and wait for the base temperature to stabilise before starting "
+                "measurements.",
         "valves": {"TANK_V": True, "V1": True, "V4": True, "V7": True, "V9": True,
                     "V10": True, "V13": True},
         "pumps": {"SCROLL1": True, "TURBO1": True},
-        "panels": {"PULSE_TUBE": True},
+        "panels": {"PULSE_TUBE": True, "EXT": True},
         "pipes": {"TANK_OUTLET_DOWN": "forward", "TURBO1_INTAKE": "forward",
                   "TURBO1_EXHAUST": "forward", "V1_TO_MAIN": "forward",
                   "HE3_IN": "forward", "V4_TO_FLOW": "forward",
