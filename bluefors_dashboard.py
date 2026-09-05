@@ -2,32 +2,9 @@
 Dilution Refrigerator — Bluefors-style Flow Schematic
 Interactive, object-oriented dashboard built with Streamlit + Matplotlib.
 
-Replicates the layout of a Bluefors "Layout: EXTRA" gas-handling schematic
-(pulse tube / heat-switch panel, vacuum can, still & 3He-in lines, turbo &
-scroll pumps, trap, mixture tank, gauges P1-P6) and adds an SOP step-through
-mode: define your procedure as an ordered list of steps, each carrying a
-snapshot of which valves/pumps/lines should be active, and step through it
-to see the flow re-drawn after every action.
-
 Run with:
     pip install -r requirements.txt
     streamlit run dr_flow_dashboard.py
-
-NOTE ON FIDELITY
------------------
-Component coordinates, pipe routing, and junction points were copied
-directly from plot_flow.py's V / BPV / PUMPS / GAUGES dictionaries and its
-pipe() / junction() call list, so the schematic's *layout* (position of
-every valve, pump, gauge, vessel, and every pipe segment / junction dot)
-now matches plot_flow.py exactly. The interactive rendering *style*
-(bowtie valve symbols with an open/shut ring, panel knobs, rounded gauge
-boxes) is kept as-is rather than switched to plot_flow's plain circles,
-since that styling is what drives this dashboard's open/closed/on/off
-visual feedback.
-
-The SOP_STEPS list near the bottom is a placeholder 6-step condense/
-circulate procedure — replace the text and snapshots with your actual SOP
-so the "step" button drives the real valve/pump states for each step.
 """
 import io
 import streamlit as st
@@ -45,7 +22,7 @@ from matplotlib.path import Path
 from dataclasses import dataclass, field
 
 # =====================================================================
-# THEME  (white schematic look, matching the reference drawing)
+# THEME 
 # =====================================================================
 BG          = "#FFFFFF"
 INK         = "#101418"
@@ -58,9 +35,6 @@ VALVE_SHUT  = "#EDEFF2"
 KNOB_FACE   = "#F3F4F6"
 PANEL_BAR   = "#0C0F13"
 MONO        = "monospace"
-
-# Canvas now matches plot_flow.py's coordinate system exactly:
-# plot_flow.py uses ax.set_xlim(0, 1350) / ax.set_ylim(1050, 0).
 CANVAS_W, CANVAS_H = 1350, 1050
 
 # =====================================================================
@@ -78,7 +52,7 @@ class Gauge:
 
 @dataclass
 class FlowBox:
-    """The 'FLOW  0.00  mmol/s' readout — distinct from the P1-P6 pressure gauges."""
+    """The 'FLOW  0.00  mmol/s' readout — distinct from P1-P6 pressure gauges."""
     cx: float; cy: float
     value: str = "0.00"
     unit: str = "mmol/s"
@@ -124,7 +98,7 @@ class Valve:
     cx: float; cy: float
     rotation: float = 0
     small: bool = False            # True for the manual bypass valves (BPV1-3, TEST, MV1, TANK_V)
-    show_id: bool = True           # False for MV1 — plot_flow.py draws it with no name at all
+    show_id: bool = True           # False for MV1
     open: bool = False
 
     def toggle(self):
@@ -143,14 +117,9 @@ class Pipe:
 
 
 # =====================================================================
-# LAYOUT  (coordinates on a 1350 x 1050 canvas, y grows downward —
-# copied 1:1 from plot_flow.py's V / BPV / PUMPS / GAUGES dicts and its
-# pipe()/junction() call list)
+# LAYOUT  (coordinates on a 1350 x 1050 canvas, y grows downward)
 # =====================================================================
 
-# Junction dots that aren't tied to any single Pipe (matches plot_flow.py's
-# standalone junction(...) calls plus the junction() calls embedded in its
-# pipe network).
 JUNCTIONS = [
     (560, 230), (650, 195), (1010, 140), (1010, 190), (1180, 190),
     (1010, 325), (1180, 325), (1010, 710), (1010, 680),
@@ -160,26 +129,9 @@ JUNCTIONS = [
 ]
 
 # =====================================================================
-# LABEL PLACEMENT  (positions instead of highlights)
+# LABEL PLACEMENT 
 # -----------------------------------------------------------------------
-# Every valve ID tag / annotation and every pump label used to be pinned
-# to a fixed spot relative to its symbol (e.g. always directly above)
-# and then papered over with an opaque white halo wherever that fixed
-# spot happened to land on top of a pipe or another symbol.
-#
-# Instead, each label below was placed by a one-off geometry pass
-# (checked against every pipe segment, valve/pump/gauge ring, junction
-# dot, and vessel/panel box in the diagram) that walks outward from the
-# component in a preferred direction order and stops at the first spot
-# with clear space. Positions are precomputed here — the underlying
-# layout is static, so there's no need to redo the search on every
-# render. Everything found a clean spot with a small margin to spare,
-# so no highlight fallback was needed for this layout.
-#
-# DIR_ALIGN maps the chosen compass direction to matplotlib text
-# alignment so each label reads naturally relative to its new anchor
-# point (e.g. a label placed to the upper-right left-aligns with its
-# baseline sitting on the bottom, like a normal callout).
+
 DIR_ALIGN = {
     "up":          dict(ha="center", va="bottom"),
     "down":        dict(ha="center", va="top"),
@@ -195,6 +147,7 @@ DIR_ALIGN = {
 # search also treats every other label's box as an obstacle once it's
 # placed (pumps first, then valve IDs, then valve annotations), so two
 # labels never land on top of each other either.
+
 VALVE_ID_POS = {
     "V1": (626.2, 206.2, "upper_left"), "V2": (760.0, 263.0, "down"),
     "V3": (853.8, 306.2, "upper_right"), "V4": (1033.8, 226.2, "upper_right"),
@@ -226,10 +179,6 @@ PUMP_LABEL_POS = {
 
 
 def build_diagram():
-    # Panel boxes are a dashboard-only interactive affordance (plot_flow.py
-    # only has plain text labels here). Narrowed to 75px wide (was 200) so
-    # they no longer collide with the P1 gauge, which plot_flow places at
-    # (150,140) — right on top of a 200px-wide HS-STILL box.
     panels = {
         "PULSE_TUBE": Panel("PULSE_TUBE", "PULSE TUBE", 20, 34,  75, 80),
         "HS_STILL":   Panel("HS_STILL",   "HS-STILL",   20, 124, 75, 80),
@@ -243,8 +192,6 @@ def build_diagram():
     }
 
     gauges = {
-        # Nudged right from x=150 so the (now-larger) gauge box clears the
-        # PULSE TUBE panel box directly beneath it (panel spans x=20-95).
         "P1": Gauge("P1", "P1", 180,  140, ""),
         "P2": Gauge("P2", "P2", 460,  140, "8.60E-1"),
         "P3": Gauge("P3", "P3", 910,  140, "6.14E+0"),
@@ -255,8 +202,6 @@ def build_diagram():
 
     flow_box = FlowBox(1010, 402, "0.00")
 
-    # Pump radii nudged up (+3-4px each) from the original plot_flow.py-matched
-    # sizes for legibility; centers are untouched so pipe endpoints still align.
     pumps = {
         "COM":     Pump("COM",     "COM.",       1180, 257, 37, "compressor"),
         "TURBO1":  Pump("TURBO1",  "TURBO 1",     650, 350, 45, "turbo"),
@@ -293,16 +238,10 @@ def build_diagram():
         "BPV1": Valve("BPV1", "",        1255,  257, small=True),
         "BPV2": Valve("BPV2", "",         800,  650, small=True),
         "BPV3": Valve("BPV3", "",        1060,  800, small=True),
-        # Unlabeled manual valve between the Scroll-1 backing tap and V12
-        # (plot_flow.py's MANUAL_UNLABELED["MV1"] — drawn with an empty name
-        # there too, so we suppress its ID text here as well; it was
-        # otherwise landing right on top of the SCROLL 1 pump label).
         "MV1":  Valve("MV1",  "",         834,  840, small=True, show_id=False),
         "TANK_V": Valve("TANK_V", "",    1220,  875, rotation=90, small=True),
     }
 
-    # Every segment below is copied point-for-point from plot_flow.py's
-    # pipe([...]) calls (grouped/named to match its section comments).
     pipes = {
         # --- LEFT / VACUUM CAN ---
         "VACCAN_TOP":     Pipe("VACCAN_TOP",     "Vacuum can top",        [(300, 80), (300, 158)]),
@@ -403,21 +342,11 @@ def build_diagram():
 
 
 # =====================================================================
-# SOP — NUS Fridge SOP for LD Fridges V0.1 (Chee & Gao, Feb 2021)
-# Section 2 "Full Cooldown Preparation (from room temperature)" and
-# Section 3 "Cooldown (from room temperature)", encoded step-for-step.
-# Each step's valve/pump/panel dict is the CUMULATIVE state of the panel
-# at that point in the procedure (matching how the physical fridge state
-# actually evolves), not just what changed in that step.
+# SOP
 # =====================================================================
 
 SOP_STEPS = [
     # ---------------- Section 2: Full Cooldown Preparation ----------------
-    # NOTE ON GAUGE TRAJECTORIES: numeric P1-P6/Flow values below are
-    # illustrative, monotonic trends consistent with the SOP's stated
-    # thresholds (e.g. "P6 < 1 mbar", "P1 < 5e-2 mbar", "P3 < 600 mbar").
-    # They are NOT logged data from a real cooldown — swap them for actual
-    # logged readings if you have them.
     {
         "name": "2.1-4  Pre-checks",
         "note": "SOP §2 steps 1-4. Check all heaters/sensors are functioning. Check radiation "
@@ -524,8 +453,6 @@ SOP_STEPS = [
                   "V1_TO_MAIN": "forward", "V1_TO_V2": "forward", "V2_TO_V3": "forward",
                   "V3_TO_MAINLINE": "forward", "V4_TO_FLOW": "forward",
                   "V7_TO_TRAP_TAP": "forward", "V7_DOWN_TO_TRAP": "forward"},
-        # P6 drops below the SOP's 1 mbar gate right as Turbo1 comes on,
-        # then continues falling over the 15 min (or overnight) wait.
         "gauges": {"P6": "6.20E-2"},
         "flow": "0.00",
     },
@@ -534,7 +461,6 @@ SOP_STEPS = [
         "note": "SOP §2 steps 15-16. Close all valves and switch off all pumps. Insert the cold "
                 "trap into the LN2 dewar.",
         "valves": {}, "pumps": {}, "panels": {}, "pipes": {},
-        # Gauges hold their last reading (isolated volumes; no pumps running).
         "gauges": {"P6": "6.20E-2"},
         "flow": "0.00",
     },
@@ -546,7 +472,6 @@ SOP_STEPS = [
         "valves": {"V2": True},
         "pumps": {}, "panels": {},
         "pipes": {"P2_TAP": "forward"},
-        # Both must read <1 mbar to proceed — shown just under the gate.
         "gauges": {"P2": "7.40E-1", "P3": "8.90E-1", "P6": "6.20E-2"},
         "flow": "0.00",
     },
@@ -637,7 +562,6 @@ SOP_STEPS = [
         "pumps": {},
         "panels": {"PULSE_TUBE": True, "HS_STILL": False, "HS_MC": False},
         "pipes": {"TANK_OUTLET_DOWN": "forward"},
-        # P5 decreasing is the SOP's own signal that phase separation is complete.
         "gauges": {"P1": "1.80E-5", "P5": "3.25E+2"},
         "vessels": {"TANK": 0.55},
         "flow": "0.00",
@@ -650,11 +574,6 @@ SOP_STEPS = [
                 "~20 min after Turbo1 starts, ~7 mW may be applied to the still heater (EXT) to "
                 "speed up cooldown if needed (toggle EXT manually if you're modeling that). "
                 "CRITICAL: verify gate valve V1 stays OPEN throughout normal operation.",
-        # Full circulation loop, matching SOP §5.1 "safe circulation mode"
-        # (V13, V10, V1, V4, V7, V9 open, Scroll1 running) plus Turbo1 once
-        # P3 < 600 mbar auto-starts it. Previously this step only opened V1,
-        # which left the diagram showing the gate valve open with no
-        # complete flow path highlighted.
         "valves": {"TANK_V": True, "V1": True, "V4": True, "V7": True, "V9": True,
                     "V10": True, "V13": True},
         "pumps": {"SCROLL1": True, "TURBO1": True},
@@ -668,9 +587,6 @@ SOP_STEPS = [
                   "SCROLL1_TO_P4N": "forward", "SCROLL1_V13_TEE": "forward",
                   "V13_DOWN": "forward", "RUN_TO_TANKLINE": "forward",
                   "TANKLINE_TO_TANK": "forward"},
-        # P3 has fallen below the 600 mbar auto-start threshold; P5 keeps
-        # dropping as mixture condenses back in; Flow is now nonzero since
-        # circulation is actually running (previously stuck at "0.00").
         "gauges": {"P1": "1.80E-5", "P3": "4.85E+2", "P5": "1.10E+2"},
         "vessels": {"TANK": 0.12},
         "flow": "0.24",
@@ -701,15 +617,8 @@ def apply_snapshot(snap):
     for pid, p in st.session_state.pipes.items():
         p.state = snap["pipes"].get(pid, "off")
     st.session_state.flow_box.value = snap.get("flow", "0.00")
-    # Gauges (P1-P6) now track the SOP step too, instead of staying frozen
-    # at the Figure-1 snapshot for the whole walkthrough. Falls back to the
-    # gauge's own last-known value if a step doesn't override it, so gauges
-    # not relevant to a given stage (e.g. P1 during Section 2, before the VC
-    # is touched) simply hold their prior reading rather than resetting.
     for gid, g in st.session_state.gauges.items():
         g.value = snap.get("gauges", {}).get(gid, g.value)
-    # Vessel fill levels (e.g. mixture tank) carry forward like gauges do,
-    # so the tank only changes when a step explicitly says it should.
     for vid, v in st.session_state.vessels.items():
         v.level = snap.get("vessels", {}).get(vid, v.level)
 
@@ -773,12 +682,6 @@ def draw_vessel_box(ax, v: Vessel):
                           facecolor="none", edgecolor=INK, linewidth=1.7, zorder=3)
     ax.add_patch(box)
 
-    # Liquid-level fill for vessels that track one (e.g. the mixture tank),
-    # filled from the bottom up and clipped to the rounded box outline so
-    # it never pokes out past the corners. The percentage reading sits in
-    # the box's own center — free real estate once the name label moves
-    # outside (see label_outside) — rather than below the box, where it'd
-    # crowd TANK_V.
     if v.level is not None:
         level = max(0.0, min(1.0, v.level))
         fill_h = v.h * level
@@ -803,9 +706,6 @@ def draw_vessel_box(ax, v: Vessel):
 
 
 def draw_gauge(ax, g: Gauge):
-    # Slightly larger box with more internal padding around the reading,
-    # and the P-label sits with a bit more clearance above the box instead
-    # of crowding its top-left corner.
     w, h = 112, 34
     box = FancyBboxPatch((g.cx - w / 2, g.cy - h / 2), w, h,
                           boxstyle="round,pad=0,rounding_size=16",
@@ -844,9 +744,6 @@ def draw_pump(ax, p: Pump):
         for k, rr in enumerate([p.r * 0.3, p.r * 0.55]):
             ax.add_patch(Arc((p.cx, p.cy), rr * 2, rr * 2, theta1=30 + k * 40,
                               theta2=300 + k * 40, color=color, lw=1.7, zorder=5))
-    # Label is placed at a precomputed clear spot (see PUMP_LABEL_POS)
-    # rather than always directly below, so it no longer needs an
-    # opaque halo to stay legible over a crossing pipe.
     lx, ly, direction = PUMP_LABEL_POS[p.id]
     align = DIR_ALIGN[direction]
     ax.text(lx, ly, p.label, color=INK, family=MONO, fontsize=9.3,
@@ -873,17 +770,6 @@ def draw_junction(ax, x, y):
 
 
 def render_figure(dpi=300):
-    # Higher DPI + slightly larger figsize gives a crisp, high-res render
-    # (the reference Bluefors panel is a clean vector-style drawing, so we
-    # push resolution well above Streamlit/Matplotlib defaults here).
-    # Margins are opened up on every side (not just the left) so nothing —
-    # gauge boxes, valve ID tags, edge labels like "AIR" — sits flush
-    # against the frame. No component coordinates change; this is purely
-    # breathing room around the existing layout.
-    # Bottom padding is smaller than the others: the lowest real content
-    # (the P5 gauge / "AIR" label row) sits around y=1000-1005, well short
-    # of the full CANVAS_H=1050, so a small fixed pad reads as intentional
-    # margin instead of a big dead strip of empty canvas below everything.
     margin_l, margin_r, margin_t, margin_b = -55, 30, -18, 20
     content_bottom = 1010
     fig, ax = plt.subplots(figsize=(14.4, 10.3), dpi=dpi)
@@ -895,15 +781,12 @@ def render_figure(dpi=300):
     ax.axis("off")
     ax.set_aspect("equal")
 
-    # Header bar: a touch taller, with the wordmark given more left/vertical
-    # padding instead of sitting in the corner.
     header_h = 38
     ax.add_patch(Rectangle((margin_l, margin_t), CANVAS_W - margin_l + margin_r, header_h,
                             facecolor=PANEL_BAR, zorder=1))
     ax.text(28, margin_t + header_h / 2, "BLUEFORS", color="white", family="sans-serif",
             fontsize=14, weight="bold", va="center", zorder=2)
 
-    # Column / annotation labels — positions copied from plot_flow.py's label(...) calls
     ax.text(300, 50, "VACUUM CAN", color=INK, family=MONO, fontsize=9.5, ha="center", zorder=3)
     ax.text(650, 50, "STILL", color=INK, family=MONO, fontsize=9.5, ha="center", zorder=3)
     ax.text(1010, 50, "3-HE IN", color=INK, family=MONO, fontsize=9.5, ha="center", zorder=3)
@@ -926,11 +809,6 @@ def render_figure(dpi=300):
     draw_flow_box(ax, st.session_state.flow_box)
     for v in st.session_state.valves.values():
         draw_bowtie(ax, v.cx, v.cy, v.rotation, v.open, small=v.small)
-        # ID tag and annotation each sit at a precomputed clear spot
-        # (see VALVE_ID_POS / VALVE_LABEL_POS) found by walking outward
-        # from the valve until landing somewhere with no pipe, junction,
-        # or neighboring symbol underneath — so plain text reads cleanly
-        # without an opaque background patch.
         if v.show_id and v.id in VALVE_ID_POS:
             id_x, id_y, direction = VALVE_ID_POS[v.id]
             align = DIR_ALIGN[direction]
@@ -951,12 +829,10 @@ def render_figure(dpi=300):
 # APP
 # =====================================================================
 
-st.set_page_config(page_title="DR Flow Schematic", layout="wide")
+st.set_page_config(page_title="Dilution Refrigerator FLow Schematic", layout="wide")
 init_state()
 
 st.title("Dilution Refrigerator — Flow Schematic")
-st.caption("Bluefors-style gas-handling panel · step through your SOP and watch the flow update after each action")
-
 # ---- SOP stepper -----------------------------------------------------
 step = SOP_STEPS[st.session_state.sop_index]
 
@@ -995,5 +871,3 @@ plt.close(fig)
 
 st.caption("Legend — black line: idle · blue dashed-style line + arrow: flowing, arrow = direction · "
            "blue ring: valve open / pump running · gray fill: valve shut / pump off.")
-st.caption("SOP_STEPS near the bottom of dr_flow_dashboard.py is a placeholder — replace the step names, "
-           "notes, and valve/pump/line snapshots with your real procedure.")
