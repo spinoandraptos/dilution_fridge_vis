@@ -7,6 +7,7 @@ Run with:
     streamlit run dr_flow_dashboard.py
 """
 import io
+import math as _math
 import streamlit as st
 import matplotlib
 matplotlib.use("Agg")
@@ -113,8 +114,7 @@ class Pipe:
     state: str = "off"             # "off" | "forward" | "reverse"
     bold: bool = False             # True for large-bore trunk lines (e.g. Turbo1->Scroll1
                                     # foreline) that are physically thicker tubing and are
-                                    # drawn heavier than regular lines *regardless* of
-                                    # whether they're currently flowing or idle.
+                                    # drawn heavier than regular lines
 
     def cycle(self):
         self.state = {"off": "forward", "forward": "reverse", "reverse": "off"}[self.state]
@@ -126,10 +126,11 @@ class Pipe:
 
 JUNCTIONS = [
     (560, 230), (650, 195), (1010, 140), (1010, 190), (1180, 190),
-    (1010, 325), (1180, 325), (1010, 710), (1010, 680),
+    (1010, 325), (1180, 325), (1010, 710),
     (790, 760), (790, 840), (1060, 930), (1220, 930), (150, 800),
-    (300, 230), (650, 230), (830, 470), (1010, 470), (1010, 760),
+    (300, 230), (650, 280), (830, 470), (1010, 470), (1010, 760),
     (1010, 930), (500, 700), (650, 700), (150, 700), (300, 700), (400, 700),
+    (300, 330), (830, 230), (960, 760), (650, 650), (1010, 615),
 ]
 
 # =====================================================================
@@ -164,15 +165,15 @@ VALVE_ID_POS = {
     "V17": (525.3, 594.7, "upper_right"), "V18": (600.0, 667.4, "up"),
     "V19": (525.3, 734.7, "upper_right"), "V20": (425.3, 734.7, "upper_right"),
     "V21": (175.3, 734.7, "upper_right"), "V22": (325.3, 734.7, "upper_right"),
-    "V23": (220.0, 790.0, "up"), "TEST": (270.0, 305.4, "up"),
-    "BPV1": (1275.7, 236.3, "upper_right"), "BPV2": (800.0, 625.4, "up"),
+    "V23": (220.0, 790.0, "up"), "TEST": (270.0, 293.4, "up"),
+    "BPV1": (1275.7, 236.3, "upper_right"), "BPV2": (800.0, 613.4, "up"),
     "BPV3": (1080.7, 779.3, "upper_right"), "TANK_V": (1251.3, 875.0, "right"),
 }
 
 VALVE_LABEL_POS = {
     # Only V1 carries an annotation ("(GATE)"); every other valve.label
     # is "" so nothing else needs a position here.
-    "V1": (678.6, 258.6, "lower_right"),
+    "V1": (658.0, 185.0, "right"),
 }
 
 PUMP_LABEL_POS = {
@@ -254,13 +255,13 @@ def build_diagram():
         "TEST_BRANCH":    Pipe("TEST_BRANCH",    "TEST branch",           [(300, 330), (250, 330)]),
         "V14_TO_V16":     Pipe("V14_TO_V16",     "TEST tee down to V16",  [(300, 330), (300, 598)]),
         "V14_TO_V15":     Pipe("V14_TO_V15",     "V14 to V15",            [(300, 202), (300, 230), (478, 230)]),
-        "V15_TO_MAIN":    Pipe("V15_TO_MAIN",    "V15 to main node",      [(522, 230), (650, 230)]),
+        "V15_TO_MAIN":    Pipe("V15_TO_MAIN",    "V15 to main node",      [(522, 230), (600, 230), (600, 280), (650, 280)]),
         "P2_TAP":         Pipe("P2_TAP",         "P2 tap",                [(560, 230), (560, 140), (460, 140)]),
 
         # --- V1 / V2 / V3 / TURBO1 ---
         "STILL_TO_V1":    Pipe("STILL_TO_V1",    "Still line to V1",      [(650, 80), (650, 208)], bold=True),
-        "V1_TO_MAIN":     Pipe("V1_TO_MAIN",     "V1 bottom to main node",[(650, 252), (650, 230)], bold=True),
-        "V1_TO_V2":       Pipe("V1_TO_V2",       "V1 to V2",              [(650, 230), (738, 230)]),
+        "V1_TO_MAIN":     Pipe("V1_TO_MAIN",     "V1 bottom to main node",[(650, 252), (650, 280)], bold=True),
+        "V1_TO_V2":       Pipe("V1_TO_V2",       "V1 to V2",              [(650, 280), (700, 280), (700, 230), (738, 230)]),
         "V2_TO_V3":       Pipe("V2_TO_V3",       "V2 down to V3",         [(782, 230), (830, 230), (830, 308)]),
         "V1_V2_BYPASS":   Pipe("V1_V2_BYPASS",   "V1/V2 bypass",          [(650, 195), (830, 195), (830, 230)]),
         "V3_TO_MAINLINE": Pipe("V3_TO_MAINLINE", "V3 to main line",       [(830, 352), (830, 470), (1010, 470)]),
@@ -277,7 +278,8 @@ def build_diagram():
         "V6_TAP":         Pipe("V6_TAP",         "V6 tap",                [(1010, 325), (1083, 325)]),
         "V6_BPV1_BOTTOM": Pipe("V6_BPV1_BOTTOM", "V6 to BPV1 (bottom)",   [(1127, 325), (1180, 325)]),
         "COM_BOTTOM_NODE":Pipe("COM_BOTTOM_NODE","COM bottom to node",    [(1180, 292), (1180, 325)]),
-        "BPV1_BYPASS":    Pipe("BPV1_BYPASS",    "BPV1 bypass around COM",[(1180, 190), (1255, 190), (1255, 325), (1180, 325)]),
+        "BPV1_BYPASS_TOP":Pipe("BPV1_BYPASS_TOP","BPV1 bypass, top half",  [(1180, 190), (1255, 190), (1255, 257)]),
+        "BPV1_BYPASS_BOT":Pipe("BPV1_BYPASS_BOT","BPV1 bypass, bottom half",[(1255, 257), (1255, 325), (1180, 325)]),
 
         # --- MAIN / TRAP / V7 / V8 / V9 ---
         "MAIN_FROM_FLOW": Pipe("MAIN_FROM_FLOW", "Main line from flow",   [(1010, 470), (1010, 488)], bold=True),
@@ -352,7 +354,7 @@ SOP_STEPS = [
     # ============== Section 1.1-1.2: Checks & Retrieve Residual Mixture ==============
     {
         "name": "1.1  System checks before cooling down",
-        "note": "SOP §1.1. Ideally done while preparing devices for cool-down. Check cooling "
+        "note": "Ideally done while preparing devices for cool-down. Check cooling "
                 "water is filled, cold trap is clean enough, and no screws or tools are left "
                 "inside the fridge. Check that all required heaters and sensors are set "
                 "appropriately and functioning. Close the cans with seams matching — o-rings "
@@ -365,7 +367,7 @@ SOP_STEPS = [
     },
     {
         "name": "1.2 steps 1-2  Retrieve residual mixture — circulate",
-        "note": "SOP §1.2. Motivation: retrieve any residual mixture that accumulated in the "
+        "note": "Motivation: retrieve any residual mixture that accumulated in the "
                 "circulation line — if skipped, this leads to mixture loss over time. Make sure "
                 "all valves are closed, especially the manual (tank) valve. Turn on Scroll1, "
                 "open V13 and V10, open V2 to equalize the pressure over V1. Wait a while, then "
@@ -375,7 +377,7 @@ SOP_STEPS = [
         "panels": {},
         "pipes": {"V1_TO_MAIN": "forward", "V1_TO_V2": "forward", "V2_TO_V3": "forward",
                   "V3_TO_MAINLINE": "forward", "V4_TO_FLOW": "forward", "MAIN_OVERPASS": "forward",
-                  "TURBO1_EXH_DOWN": "forward", "EXH_TO_V10": "forward",
+                  "TURBO1_INTAKE": "forward", "TURBO1_EXH_DOWN": "forward", "EXH_TO_V10": "forward",
                   "V10_TO_SCROLL1": "forward", "SCROLL1_TO_P4N": "forward",
                   "SCROLL1_V13_TEE": "forward", "V13_DOWN": "forward"},
         "gauges": {"P2": "6.20E-1", "P3": "5.40E-1"},
@@ -383,7 +385,7 @@ SOP_STEPS = [
     },
     {
         "name": "1.2 steps 3-5  Stabilize & isolate progressively",
-        "note": "SOP §1.2 steps 3-5. Continue until pressures stabilize: P3 should read ~0, P2 "
+        "note": "Continue until pressures stabilize: P3 should read ~0, P2 "
                 "in the low e-2 to e-3 mbar range, and P4/P5 around 760-770 mbar (~30-60 min). "
                 "Then close V4, V3, V1, V2, V10, Scroll1 and V13 in that order, pumping "
                 "progressively smaller sections — note the values in the cool-down notes on "
@@ -397,7 +399,7 @@ SOP_STEPS = [
     # ==================== Section 1.3: Evacuate DU and the lines ====================
     {
         "name": "1.3 step 1  Evacuate service manifold",
-        "note": "SOP §1.3 step 1. Start Scroll2, wait 10 s for the internal relay to switch, "
+        "note": "Start Scroll2, wait 10 s for the internal relay to switch, "
                 "then open V21 to evacuate the service manifold.",
         "valves": {"V21": True},
         "pumps": {"SCROLL2": True},
@@ -409,34 +411,29 @@ SOP_STEPS = [
     },
     {
         "name": "1.3 steps 2-3  Equalize & open gate valve V1",
-        "note": "SOP §1.3 steps 2-3. Open V2 to equalize the pressure over gate valve V1. "
+        "note": "Open V2 to equalize the pressure over gate valve V1. "
                 "CAUTION: gate valve V1 must NOT be operated when the pressure difference "
                 "is >30 mbar — this can result in damage. Wait a few seconds for the pressure "
                 "to equalize, then open gate valve V1 and close V2.",
-        "valves": {"V21": True, "V2": True, "V1": True},
+        "valves": {"V21": True, "V1": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
-        "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
-                  "V1_TO_MAIN": "forward", "V1_TO_V2": "forward", "P2_TAP": "forward"},
         "gauges": {"P6": "4.10E+1"},
         "flow": "0.00",
     },
     {
         "name": "1.3 step 4  Connect condensing & pumping sides",
-        "note": "SOP §1.3 step 4. Open V3 and V4 to connect the condensing and pumping side of "
+        "note": "Open V3 and V4 to connect the condensing and pumping side of "
                 "the dilution unit (DU).",
-        "valves": {"V21": True, "V2": True, "V1": True, "V3": True, "V4": True},
+        "valves": {"V21": True, "V1": True, "V3": True, "V4": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
-        "pipes": {"V21_UP": "forward", "V21_TO_SCROLL2": "forward", "BACKING_MANIFOLD": "forward",
-                  "V1_TO_MAIN": "forward", "V1_TO_V2": "forward", "P2_TAP": "forward",
-                  "V2_TO_V3": "forward", "V3_TO_MAINLINE": "forward", "V4_TO_FLOW": "forward"},
         "gauges": {"P6": "6.30E+0"},
         "flow": "0.00",
     },
     {
         "name": "1.3 steps 5-7  Evacuate DU with Turbo1",
-        "note": "SOP §1.3 steps 5-7. Open V18 to connect the service manifold with the DU "
+        "note": "Open V18 to connect the service manifold with the DU "
                 "circulation circuit, evacuating the dilution unit. Wait for P6 < 1 mbar, then "
                 "start Turbo1. Pump for 15 minutes to an hour.",
         "valves": {"V21": True, "V1": True, "V3": True, "V4": True, "V18": True},
@@ -451,14 +448,14 @@ SOP_STEPS = [
     },
     {
         "name": "1.3 step 8  Close all valves and pumps",
-        "note": "SOP §1.3 step 8. Close all valves and switch off all pumps.",
+        "note": "Close all valves and switch off all pumps.",
         "valves": {}, "pumps": {}, "panels": {}, "pipes": {},
         "gauges": {"P6": "6.20E-2"},
         "flow": "0.00",
     },
     {
         "name": "1.3 step 9  Open manual valve to the tank",
-        "note": "SOP §1.3 step 9. Open the manual valve to the tank.",
+        "note": "Open the manual valve to the tank.",
         "valves": {"TANK_V": True},
         "pumps": {}, "panels": {}, "pipes": {},
         "gauges": {"P6": "6.20E-2"},
@@ -466,7 +463,7 @@ SOP_STEPS = [
     },
     {
         "name": "1.3 steps 10-11  Check P4 in Cooldown database",
-        "note": "SOP §1.3 steps 10-11. Make sure V10, V8 and V9 are off. Open Scroll 1 and V13, "
+        "note": "Make sure V10, V8 and V9 are off. Open Scroll 1 and V13, "
                 "wait 10 sec, and check P4 — it should read 760 ± 5 mbar. Note down P4 and P5 in "
                 "the Cooldown database, then close V13 and turn off Scroll 1.",
         "valves": {"TANK_V": True, "V13": True},
@@ -482,7 +479,7 @@ SOP_STEPS = [
     # ========================= Section 1.4: Evacuate vacuum can =========================
     {
         "name": "1.4 steps 1-3  Rough pump VC",
-        "note": "SOP §1.4. Goal: evacuate the vacuum can (VC) until P1 ≲ 2×10⁻³ mbar "
+        "note": "Goal: evacuate the vacuum can (VC) until P1 ≲ 2×10⁻³ mbar "
                 "(typically ~1.5 hrs). The wing nuts will become loose once the VC is under "
                 "vacuum — do NOT retighten them. Switch on Scroll2, wait 10 s for the internal "
                 "relay, then open V21, V16 and V14 to rough-pump the VC. Turn on the P1 gauge "
@@ -497,7 +494,7 @@ SOP_STEPS = [
     },
     {
         "name": "1.4 steps 4-5  Switch to Turbo1",
-        "note": "SOP §1.4 steps 4-5. Close V16; open V18 and V15; switch on Turbo1. Pump until "
+        "note": "Close V16; open V18 and V15; switch on Turbo1. Pump until "
                 "P1 ≲ 2×10⁻³ mbar (~1-2 hrs).",
         "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
         "pumps": {"SCROLL2": True, "TURBO1": True},
@@ -512,7 +509,7 @@ SOP_STEPS = [
     },
     {
         "name": "1.4 step 6  Leak check",
-        "note": "SOP §1.4 step 6. Leak-check if anything on top of the fridge changed.",
+        "note": "Leak-check if anything on top of the fridge changed.",
         "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
         "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {},
@@ -528,7 +525,7 @@ SOP_STEPS = [
     # ======================= Section 1.5: Precool with Pulse Tube =======================
     {
         "name": "1.5 steps 1-2  Start pulse tube & heat switches",
-        "note": "SOP §1.5. Goal: precool the system (4K, still and MXC stages) to below 4 K "
+        "note": "Goal: precool the system (4K, still and MXC stages) to below 4 K "
                 "(~24 hrs) — or to 15 K if starting the Pulse Pre-Cool script afterwards. Make "
                 "sure the Bluefors temperature controller, reader and logging are running. Set "
                 "the Still Heater power to 6 mW and Relay Mode to SHORT (0 in the "
@@ -549,7 +546,7 @@ SOP_STEPS = [
     },
     {
         "name": "1.5 step 3  Stop OVC pumping below 70 K",
-        "note": "SOP §1.5 step 3. Once all flanges are below 70 K (typically ~12 hrs), stop "
+        "note": "Once all flanges are below 70 K (typically ~12 hrs), stop "
                 "pumping the outer vacuum can (OVC): close V14 first — always, in case of any "
                 "air inside the VC — then V15, V18 and V21. Turn off Scroll2 and Turbo1.",
         "valves": {}, "pumps": {},
@@ -562,7 +559,7 @@ SOP_STEPS = [
     # ========================= Section 1.6: Pulse Pre-cooling (optional) =========================
     {
         "name": "1.6  Pulse pre-cooling (optional)",
-        "note": "SOP §1.6. Optional step to decrease cooldown time; ideally started once the "
+        "note": "Optional step to decrease cooldown time; ideally started once the "
                 "4K, still and MXC stages are ≲15 K (typically 1.5-2 hrs) and Turbo1 rotates at "
                 "less than 100 Hz. Ensure the manual valve at the tank is open, then start PPC "
                 "by running Pulse_Pre_Cool_v1.24.",
@@ -578,7 +575,7 @@ SOP_STEPS = [
     # ========================== Section 1.7: Condensing Mixture ==========================
     {
         "name": "1.7 steps 1-2  Begin condensing",
-        "note": "SOP §1.7. Requires 4K, still and MXC below 4 K (typically 6 hrs). CRITICAL: "
+        "note": "Requires 4K, still and MXC below 4 K (typically 6 hrs). CRITICAL: "
                 "gate valve V1 must be open during normal operation — it's the only way for "
                 "the mixture to return to the tank! Ensure the manual valve at the tank is "
                 "open, then start condensing by running condense_wLN2_v1_24.",
@@ -592,7 +589,7 @@ SOP_STEPS = [
     },
     {
         "name": "1.7 step 3  Still heater / EXT — normal operation",
-        "note": "SOP §1.7 step 3. The still heater should turn on automatically — check the EXT "
+        "note": "The still heater should turn on automatically — check the EXT "
                 "toggle on the small screen of the Bluefors temperature control unit; it stays "
                 "grey until EXT is switched on. If it hasn't come on automatically, turn it on "
                 "manually and wait for the base temperature to stabilise before starting "
@@ -618,12 +615,169 @@ SOP_STEPS = [
 
 
 
+# =====================================================================
+# FLOW DERIVATION 
+# -----------------------------------------------------------------------
+# Pipe "forward"/"off" state is derived from the actual valve/pump state
+# via union-find connectivity, instead of being hand-typed per SOP step.
+# This guarantees the blue "flowing" highlight can never drift out of
+# sync with which valves are actually open (see e.g. the V2-should-be-
+# closed bug this replaced).
+# =====================================================================
+
+VALVE_PORTS = {
+    "V1": ((650,208), (650,252)), "V2": ((738,230), (782,230)),
+    "V3": ((830,308), (830,352)), "V4": ((1010,228), (1010,272)),
+    "V5": ((1083,190), (1127,190)), "V6": ((1083,325), (1127,325)),
+    "V7": ((1110,488), (1110,532)), "V8": ((1010,525), (1010,575)),
+    "V9": ((1110,638), (1110,682)), "V10": ((708,760), (752,760)),
+    "V11": ((790,930), (822,930)), "V12": ((878,840), (922,840)),
+    "V13": ((1010,778), (1010,822)), "V14": ((300,158), (300,202)),
+    "V15": ((478,230), (522,230)), "V16": ((300,598), (300,642)),
+    "V17": ((500,598), (500,642)), "V18": ((578,700), (622,700)),
+    "V19": ((500,738), (500,782)), "V20": ((400,738), (400,782)),
+    "V21": ((150,738), (150,782)), "V22": ((300,738), (300,782)),
+    "V23": ((220,828), (220,872)), "TEST": ((250,330), (300,330)),
+    "BPV1": ((1180,190), (1180,325)),
+    "BPV2": ((778,650), (822,650)), "BPV3": ((1060,778), (1060,822)),
+    "MV1": ((816,840), (852,840)), "TANK_V": ((1220,850), (1220,900)),
+}
+PUMP_PORTS = {
+    "COM":     {"intake": (1180,222), "exhaust": (1180,292)},
+    "TURBO1":  {"intake": (650,318),  "exhaust": (650,382)},
+    "SCROLL1": {"intake": (868,760),  "exhaust": (932,760)},
+    "TURBO2":  {"intake": (300,818),  "exhaust": (300,882)},
+    "SCROLL2": {"intake": (150,818),  "exhaust": (150,882)},
+}
+TURBO_IDS = {"TURBO1", "TURBO2"}
+
+
+def _on_segment(pt, a, b):
+    (px, py), (ax, ay), (bx, by) = pt, a, b
+    if (bx - ax) * (py - ay) - (by - ay) * (px - ax) != 0:
+        return False
+    if min(ax, bx) <= px <= max(ax, bx) and min(ay, by) <= py <= max(ay, by):
+        return True
+    return False
+
+
+def _split_pipe_points(pts, junctions):
+    out = [pts[0]]
+    for i in range(len(pts) - 1):
+        a, b = pts[i], pts[i + 1]
+        extra = [j for j in junctions if j not in (a, b) and _on_segment(j, a, b)]
+        extra.sort(key=lambda j: _math.hypot(j[0] - a[0], j[1] - a[1]))
+        out.extend(extra)
+        out.append(b)
+    return out
+
+
+def compute_pipe_states(pipes, valve_state, pump_state):
+    """valve_state / pump_state: dict of id -> bool (True = open/on).
+
+    Returns pid -> 'forward' | 'reverse' | 'off', matching the Pipe.state
+    values draw_pipe() consumes. 'forward' draws the arrow along the pipe's
+    points as authored (points[0] -> points[-1]); 'reverse' draws it the
+    opposite way. Both only get assigned when the pipe is actually part of
+    a component that includes an active pump.
+
+    Direction is derived, not just connectivity: every active pump's intake
+    port acts as a flow SINK (things point toward it) and its exhaust port
+    acts as a flow SOURCE (things point away from it). This handles both
+    plain dead-end evacuation and backed-pump chains (e.g. Turbo1's exhaust
+    feeding Scroll2's intake through V18/V21) correctly, since a pipe near
+    an active exhaust and a pipe near an active intake naturally get
+    opposite-signed treatment instead of a single hardcoded orientation.
+    """
+    junctions = set(tuple(j) for j in JUNCTIONS)
+    adj = {}
+
+    def add_edge(a, b):
+        adj.setdefault(a, set()).add(b)
+        adj.setdefault(b, set()).add(a)
+
+    pipe_ends = {}
+    for pid, p in pipes.items():
+        pts = [tuple(pt) for pt in p.points]
+        if pid in ("BPV1_BYPASS_TOP", "BPV1_BYPASS_BOT"):
+            pipe_ends[pid] = (pts[0], pts[-1])
+            continue
+        pts = _split_pipe_points(pts, junctions)
+        for i in range(len(pts) - 1):
+            add_edge(pts[i], pts[i + 1])
+        pipe_ends[pid] = (pts[0], pts[-1])
+
+    for vid, (a, b) in VALVE_PORTS.items():
+        if vid == "BPV1":
+            continue
+        if valve_state.get(vid, False):
+            add_edge(a, b)
+
+    top = [tuple(pt) for pt in pipes["BPV1_BYPASS_TOP"].points]
+    bot = [tuple(pt) for pt in pipes["BPV1_BYPASS_BOT"].points]
+    add_edge(top[0], top[-1])
+    add_edge(bot[0], bot[-1])
+    if valve_state.get("BPV1", False):
+        add_edge(top[-1], bot[0])
+
+    # An idle turbo pump still passively conducts (no valve inside it), it
+    # just isn't actively pulling/pushing -- so it contributes an ordinary
+    # undirected edge rather than a source/sink role.
+    for pmid, ports in PUMP_PORTS.items():
+        if pmid in TURBO_IDS and not pump_state.get(pmid, False):
+            add_edge(ports["intake"], ports["exhaust"])
+
+    exhaust_sources, intake_sinks = set(), set()
+    for pmid, ports in PUMP_PORTS.items():
+        if pump_state.get(pmid, False):
+            exhaust_sources.add(ports["exhaust"])
+            intake_sinks.add(ports["intake"])
+
+    def bfs(sources):
+        from collections import deque
+        dist = {s: 0 for s in sources}
+        q = deque(sources)
+        while q:
+            u = q.popleft()
+            for v in adj.get(u, ()):
+                if v not in dist:
+                    dist[v] = dist[u] + 1
+                    q.append(v)
+        return dist
+
+    dist_from_exhaust = bfs(exhaust_sources) if exhaust_sources else {}
+    dist_from_intake = bfs(intake_sinks) if intake_sinks else {}
+    reachable = set(dist_from_exhaust) | set(dist_from_intake)
+
+    result = {}
+    for pid, (s, e) in pipe_ends.items():
+        if s not in reachable or e not in reachable:
+            result[pid] = "off"
+            continue
+
+        candidates = []  # True = points[0]->points[-1] (authored order) is correct
+        de_s, de_e = dist_from_exhaust.get(s), dist_from_exhaust.get(e)
+        if de_s is not None and de_e is not None and de_s != de_e:
+            candidates.append(de_s < de_e)          # away from the exhaust source
+        di_s, di_e = dist_from_intake.get(s), dist_from_intake.get(e)
+        if di_s is not None and di_e is not None and di_s != di_e:
+            candidates.append(di_s > di_e)           # toward the intake sink
+
+        if not candidates:
+            result[pid] = "forward"  # equidistant/ambiguous: keep authored order
+            continue
+        # If both signals exist and disagree, trust the intake (sink) signal --
+        # "flow toward the operating pump" is the load-bearing convention
+        s_first = candidates[-1] if len(set(candidates)) > 1 else candidates[0]
+        result[pid] = "forward" if s_first else "reverse"
+    return result
+
+
 def snapshot_from_step(step):
     return {
         "valves": step.get("valves", {}),
         "pumps":  step.get("pumps", {}),
         "panels": step.get("panels", {}),
-        "pipes":  step.get("pipes", {}),
         "flow":   step.get("flow", "0.00"),
         "gauges": step.get("gauges", {}),
         "vessels": step.get("vessels", {}),
@@ -637,8 +791,16 @@ def apply_snapshot(snap):
         p.on = snap["pumps"].get(pid, False)
     for pid, p in st.session_state.panels.items():
         p.on = snap.get("panels", {}).get(pid, False)
+
+    # Derive which pipes are actually flowing from the valve/pump state
+    # that was just applied, rather than trusting a separately hand-typed
+    # "pipes" dict that can silently drift out of sync (see notes above).
+    valve_open = {vid: v.open for vid, v in st.session_state.valves.items()}
+    pump_on = {pid: p.on for pid, p in st.session_state.pumps.items()}
+    derived = compute_pipe_states(st.session_state.pipes, valve_open, pump_on)
     for pid, p in st.session_state.pipes.items():
-        p.state = snap["pipes"].get(pid, "off")
+        p.state = derived.get(pid, "off")
+
     st.session_state.flow_box.value = snap.get("flow", "0.00")
     for gid, g in st.session_state.gauges.items():
         g.value = snap.get("gauges", {}).get(gid, g.value)
@@ -670,7 +832,12 @@ def valve_radius(small=False):
     return 17 if small else 25
 
 
-def draw_bowtie(ax, cx, cy, rotation, open_, small=False):
+MANUAL_HANDLE_STEM = 12   # px the handle stem projects out from the circle edge
+MANUAL_HANDLE_CAP_W = 9   # half-width of the T-cap at the end of the stem
+MANUAL_HANDLE_DIR = {"BPV1": "right", "BPV3": "right", "TANK_V": "left"}
+
+
+def draw_bowtie(ax, cx, cy, rotation, open_, small=False, handle_dir="up"):
     r = valve_radius(small)
     s = 0.68 if small else 1.05
     verts = [(-14 * s, -9 * s), (-14 * s, 9 * s), (0, 0),
@@ -686,6 +853,26 @@ def draw_bowtie(ax, cx, cy, rotation, open_, small=False):
     t = mtransforms.Affine2D().rotate_deg(rotation).translate(cx, cy) + ax.transData
     poly.set_transform(t)
     ax.add_patch(poly)
+
+    # Manual-actuator handle: marks the manual/bypass valves (BPV1-3, TEST,
+    # MV1, TANK_V) as a visually distinct class from the numbered process
+    # valves, rather than just a smaller copy of the same bowtie icon.
+    if small:
+        if handle_dir in ("left", "right"):
+            sign = -1 if handle_dir == "left" else 1
+            stem_end = cx + sign * (r + MANUAL_HANDLE_STEM)
+            ax.plot([cx + sign * r, stem_end], [cy, cy], color=ring, lw=1.6,
+                     solid_capstyle="round", zorder=5)
+            ax.plot([stem_end, stem_end],
+                     [cy - MANUAL_HANDLE_CAP_W, cy + MANUAL_HANDLE_CAP_W],
+                     color=ring, lw=2.0, solid_capstyle="round", zorder=5)
+        else:  # "up"
+            stem_top = cy - r - MANUAL_HANDLE_STEM
+            ax.plot([cx, cx], [cy - r, stem_top], color=ring, lw=1.6,
+                     solid_capstyle="round", zorder=5)
+            ax.plot([cx - MANUAL_HANDLE_CAP_W, cx + MANUAL_HANDLE_CAP_W],
+                     [stem_top, stem_top], color=ring, lw=2.0,
+                     solid_capstyle="round", zorder=5)
 
 
 def draw_panel(ax, p: Panel):
@@ -836,7 +1023,8 @@ def render_figure(dpi=300):
         draw_gauge(ax, g)
     draw_flow_box(ax, st.session_state.flow_box)
     for v in st.session_state.valves.values():
-        draw_bowtie(ax, v.cx, v.cy, v.rotation, v.open, small=v.small)
+        draw_bowtie(ax, v.cx, v.cy, v.rotation, v.open, small=v.small,
+                    handle_dir=MANUAL_HANDLE_DIR.get(v.id, "up"))
         if v.show_id and v.id in VALVE_ID_POS:
             id_x, id_y, direction = VALVE_ID_POS[v.id]
             align = DIR_ALIGN[direction]
