@@ -8,6 +8,7 @@ Run with:
 """
 import io
 import math as _math
+import time
 import streamlit as st
 import matplotlib
 matplotlib.use("Agg")
@@ -131,6 +132,7 @@ JUNCTIONS = [
     (300, 230), (650, 280), (830, 470), (1010, 470), (1010, 760),
     (1010, 930), (500, 700), (650, 700), (150, 700), (300, 700), (400, 700),
     (300, 330), (830, 230), (960, 760), (650, 650), (1010, 615),
+    (1010, 840), (300, 140),
 ]
 
 # =====================================================================
@@ -333,7 +335,11 @@ def build_diagram():
         "BPV3_TEE_DOWN":  Pipe("BPV3_TEE_DOWN",  "BPV3 tee down",         [(1060, 760), (1060, 778)]),
         "BPV3_DOWN_RUN":  Pipe("BPV3_DOWN_RUN",  "BPV3 down to run",      [(1060, 822), (1060, 930)]),
         "P5_TAP":         Pipe("P5_TAP",         "P5 tap",                [(1138, 985), (1220, 985), (1220, 930)]),
-        "TANKLINE_TO_TANK":Pipe("TANKLINE_TO_TANK","Tank line up to tank", [(1220, 930), (1220, 850)]),
+        # TANK_V's near-side flank (1220,850) already sits exactly on the tank
+        # vessel's own bottom edge, so there's no real pipe length on this side
+        # of the valve -- it must NOT reach across to the valve's far-side
+        # flank (1220,900) or beyond, or it bridges straight around TANK_V.
+        "TANKLINE_TO_TANK":Pipe("TANKLINE_TO_TANK","Tank line up to tank", [(1220, 850), (1220, 850)]),
         "TANK_OUTLET_DOWN":Pipe("TANK_OUTLET_DOWN","Tank outlet down",    [(1220, 900), (1220, 930)]),
 
         # --- TURBO 2 / SCROLL 2 ---
@@ -360,6 +366,12 @@ SOP_STEPS = [
                 "appropriately and functioning. Close the cans with seams matching — o-rings "
                 "and o-ring surfaces must be clean and greased, especially with no hair; use "
                 "about half a pea size of grease.",
+        "physics": "This is all about the vacuum seal you're about to rely on for weeks. "
+                "A single hair or dust grain across an o-ring creates a microscopic leak "
+                "channel that no amount of pumping can close — and once the system is cold, "
+                "that leak path is buried under kilograms of metal and inaccessible. Grease "
+                "fills microscopic surface roughness so the elastomer makes true contact "
+                "with the metal flange instead of just touching high points.",
         "valves": {}, "pumps": {}, "panels": {}, "pipes": {},
         "gauges": {"P1": "", "P2": "8.60E-1", "P3": "6.14E+0", "P4": "1.64E+2",
                    "P5": "8.11E+2", "P6": "5.08E-1"},
@@ -372,6 +384,13 @@ SOP_STEPS = [
                 "all valves are closed, especially the manual (tank) valve. Turn on Scroll1, "
                 "open V13 and V10, open V2 to equalize the pressure over V1. Wait a while, then "
                 "open V1, V3 and V4.",
+        "physics": "He-3/He-4 mixture is expensive and finite, so any left sitting in the "
+                "circulation line from the last run needs to be swept back before you pump "
+                "on the lines, or it's lost to the pumps and vented. V2 is opened first — not "
+                "the gate valve V1 — purely to equalize pressure across V1 through a smaller "
+                "bypass path; gate valves have large flat sealing surfaces that can be "
+                "damaged by a sudden pressure slam, so they're only actuated once ΔP is near "
+                "zero.",
         "valves": {"V13": True, "V10": True, "V2": True, "V1": True, "V3": True, "V4": True},
         "pumps": {"SCROLL1": True},
         "panels": {},
@@ -391,9 +410,20 @@ SOP_STEPS = [
                 "progressively smaller sections — note the values in the cool-down notes on "
                 "Notion. If planning to clean the cold trap, see SOP §3.2 for additional steps "
                 "first.",
+        "physics": "P3 → 0 means the volume nearest the pump is essentially fully "
+                "evacuated of recovered mixture; P4/P5 near atmospheric confirms the tank "
+                "has received it back and is sitting at a normal storage pressure. Closing "
+                "valves from the far end inward (V4 → V3 → V1 → V2 → V10 → Scroll1 → V13) "
+                "ensures each segment is pumped down *before* it's sealed off — closing in "
+                "the wrong order would trap a pocket of un-recovered mixture with nowhere "
+                "to go.",
         "valves": {}, "pumps": {}, "panels": {}, "pipes": {},
         "gauges": {"P2": "4.50E-2", "P3": "0.00E+0", "P4": "7.65E+2", "P5": "7.62E+2"},
         "flow": "0.00",
+        # All these valves end up closed -- a plain snapshot would just show
+        # them all snap shut at once. The note is explicit that the CLOSING
+        # order matters (far end inward), so replay it valve-by-valve.
+        "order": ["V4", "V3", "V1", "V2", "V10", "V13"],
     },
 
     # ==================== Section 1.3: Evacuate DU and the lines ====================
@@ -401,6 +431,13 @@ SOP_STEPS = [
         "name": "1.3 step 1  Evacuate service manifold",
         "note": "Start Scroll2, wait 10 s for the internal relay to switch, "
                 "then open V21 to evacuate the service manifold.",
+        "physics": "The service manifold is the shared backing line that will soon be "
+                "connected to the precious He-3/He-4 mixture side. Pumping it down first "
+                "with the dry scroll pump clears out air and moisture sitting in the "
+                "manifold, so that when it's later joined to the mixture lines it doesn't "
+                "dump atmospheric gas — and the water vapor that comes with it — into a "
+                "system that will eventually be cooled to millikelvin temperatures, where "
+                "any trace of air would freeze solid and block the fine capillaries.",
         "valves": {"V21": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
@@ -415,16 +452,33 @@ SOP_STEPS = [
                 "CAUTION: gate valve V1 must NOT be operated when the pressure difference "
                 "is >30 mbar — this can result in damage. Wait a few seconds for the pressure "
                 "to equalize, then open gate valve V1 and close V2.",
+        "physics": "Same principle as the gate-valve caution earlier, made explicit here: "
+                "V1 is a large-bore gate valve, and slamming it open across tens of mbar of "
+                "differential pressure can warp or gouge its sealing surface, since the "
+                "sudden gas rush can also drag along particulates that scratch the seat. "
+                "Bleeding the pressure down through the narrow V2 bypass first removes that "
+                "risk before the main valve ever moves.",
         "valves": {"V21": True, "V1": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
         "gauges": {"P6": "4.10E+1"},
         "flow": "0.00",
+        # V2 nets to "closed" both before and after this step -- it's opened
+        # to bleed pressure across V1, then closed again once V1 is open. A
+        # before/after diff would never show that happening, so this step
+        # needs explicit (valve, action) entries rather than bare valve ids.
+        "order": [("V2", "open"), ("V1", "open"), ("V2", "close")],
     },
     {
         "name": "1.3 step 4  Connect condensing & pumping sides",
         "note": "Open V3 and V4 to connect the condensing and pumping side of "
                 "the dilution unit (DU).",
+        "physics": "The DU has two internal sides — the high-pressure condensing line "
+                "that will later feed liquid mixture in, and the low-pressure pumping line "
+                "that extracts vapor from the still during normal operation. Joining them "
+                "here via V3/V4 turns the whole internal volume — including the fine "
+                "capillaries and heat exchangers — into one pumpable space, so it can all be "
+                "evacuated together before any mixture is condensed into it.",
         "valves": {"V21": True, "V1": True, "V3": True, "V4": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
@@ -436,6 +490,14 @@ SOP_STEPS = [
         "note": "Open V18 to connect the service manifold with the DU "
                 "circulation circuit, evacuating the dilution unit. Wait for P6 < 1 mbar, then "
                 "start Turbo1. Pump for 15 minutes to an hour.",
+        "physics": "A scroll pump alone bottoms out around 1e-2–1e-3 mbar — good enough to "
+                "rough out bulk air, but nowhere near clean enough for a DU. Turbo1 is a "
+                "turbomolecular pump: spinning blades mechanically bat individual gas "
+                "molecules toward the exhaust, which works in the molecular-flow regime "
+                "that rotary/scroll pumps can't reach. The extended pump time lets gas that "
+                "was adsorbed on the internal tubing walls (not just floating as free gas) "
+                "desorb and get removed — any left behind would freeze and block a "
+                "capillary once the fridge goes cold.",
         "valves": {"V21": True, "V1": True, "V3": True, "V4": True, "V18": True},
         "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {},
@@ -449,6 +511,12 @@ SOP_STEPS = [
     {
         "name": "1.3 step 8  Close all valves and pumps",
         "note": "Close all valves and switch off all pumps.",
+        "physics": "This is a clean break between the vacuum-pumping phase and the "
+                "gas-handling phase. With the DU freshly evacuated and sealed off, it holds "
+                "its own vacuum passively — no pump needs to run continuously — and "
+                "isolating it now means the next step (opening the tank) can't accidentally "
+                "connect a running pump's exhaust or backstreaming oil vapor into the clean "
+                "system.",
         "valves": {}, "pumps": {}, "panels": {}, "pipes": {},
         "gauges": {"P6": "6.20E-2"},
         "flow": "0.00",
@@ -456,6 +524,10 @@ SOP_STEPS = [
     {
         "name": "1.3 step 9  Open manual valve to the tank",
         "note": "Open the manual valve to the tank.",
+        "physics": "This physically connects the now-evacuated DU to the mixture storage "
+                "tank for the first time this cooldown. Nothing flows yet — the DU is under "
+                "vacuum and the tank is near atmospheric — but the two volumes are now "
+                "linked, setting up the pressure check in the next step.",
         "valves": {"TANK_V": True},
         "pumps": {}, "panels": {}, "pipes": {},
         "gauges": {"P6": "6.20E-2"},
@@ -466,6 +538,10 @@ SOP_STEPS = [
         "note": "Make sure V10, V8 and V9 are off. Open Scroll 1 and V13, "
                 "wait 10 sec, and check P4 — it should read 760 ± 5 mbar. Note down P4 and P5 in "
                 "the Cooldown database, then close V13 and turn off Scroll 1.",
+        "physics": "This is a quick diagnostic, not a real pumping step: briefly sampling "
+                "P4 with Scroll1 confirms the tank line isn't blocked and the stored mixture "
+                "is at the expected ~760 mbar — essentially a pressure sanity check on the "
+                "gas inventory before you commit hours to a full cooldown around it.",
         "valves": {"TANK_V": True, "V13": True},
         "pumps": {"SCROLL1": True},
         "panels": {},
@@ -484,6 +560,14 @@ SOP_STEPS = [
                 "vacuum — do NOT retighten them. Switch on Scroll2, wait 10 s for the internal "
                 "relay, then open V21, V16 and V14 to rough-pump the VC. Turn on the P1 gauge "
                 "once P6 < 1 mbar (after ~15 min).",
+        "physics": "The vacuum can (OVC) is the outer jacket that thermally isolates the "
+                "cold stages from room temperature, the same way a thermos flask's vacuum "
+                "gap stops heat conduction and convection. Any residual gas in it would "
+                "conduct/convect heat straight from the warm outer wall to the cold inner "
+                "stages, making it impossible to reach base temperature. The wing nuts loosen "
+                "because atmospheric pressure is now pressing the can onto its o-ring far "
+                "harder than the bolts ever could — that's the vacuum doing the sealing, "
+                "which is why retightening them would actually risk deforming the seal.",
         "valves": {"V21": True, "V16": True, "V14": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
@@ -496,6 +580,12 @@ SOP_STEPS = [
         "name": "1.4 steps 4-5  Switch to Turbo1",
         "note": "Close V16; open V18 and V15; switch on Turbo1. Pump until "
                 "P1 ≲ 2×10⁻³ mbar (~1-2 hrs).",
+        "physics": "Same reasoning as switching to Turbo1 for the DU: the scroll pump's "
+                "mechanical clearances let gas leak backward once you're already close to "
+                "its base pressure, so it can't push the OVC any lower on its own. The "
+                "turbopump takes over for the final decade or two of vacuum, getting the can "
+                "to a pressure low enough that gas conduction between the stages becomes "
+                "genuinely negligible.",
         "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
         "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {},
@@ -510,6 +600,12 @@ SOP_STEPS = [
     {
         "name": "1.4 step 6  Leak check",
         "note": "Leak-check if anything on top of the fridge changed.",
+        "physics": "Even a pinhole leak that would be irrelevant at atmospheric pressure "
+                "becomes a significant gas load at these vacuum levels, and any wiring or "
+                "feedthrough work since the last cooldown is the most likely place for a "
+                "seal to have shifted. Catching it now — while everything is still at room "
+                "temperature and accessible — is vastly easier than discovering a leak once "
+                "the fridge is cold and the leak path is buried under kilograms of metal.",
         "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
         "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {},
@@ -533,6 +629,16 @@ SOP_STEPS = [
                 "switchable from software. Turn on the Pulse Tube and the two Heat Switches "
                 "(HS-Still, HS-MC); monitor for 10-15 min — compressor output water should "
                 "stay ≤40°C, current around 11-14 A.",
+        "physics": "The pulse tube is a cryocooler that reaches ~4 K with no moving parts "
+                "at its cold end — it cycles gas pressure to push heat from cold to warm, "
+                "similar in spirit to a Stirling engine. The heat switches (HS-Still, HS-MC) "
+                "are what actually let that cooling power reach the still and mixing chamber "
+                "stages during this phase — they thermally *connect* those stages to the "
+                "cold head, whereas during normal measurement operation they're switched off "
+                "to thermally isolate the coldest stage from any residual heat load upstream. "
+                "The small still-heater bias keeps its thermometer in a stable, predictable "
+                "regime during the ramp instead of drifting through a noisy near-zero-power "
+                "region.",
         "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
         "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
@@ -549,6 +655,12 @@ SOP_STEPS = [
         "note": "Once all flanges are below 70 K (typically ~12 hrs), stop "
                 "pumping the outer vacuum can (OVC): close V14 first — always, in case of any "
                 "air inside the VC — then V15, V18 and V21. Turn off Scroll2 and Turbo1.",
+        "physics": "Below about 70 K, any residual gas molecules in the OVC hit the cold "
+                "surfaces and simply stick there — this is cryopumping, and it's far more "
+                "effective than any mechanical pump at these temperatures. The vacuum can is "
+                "now evacuating itself, so continuing to run Turbo1/Scroll2 adds nothing "
+                "except mechanical vibration coupling into the cold stages, which is exactly "
+                "what you don't want for sensitive low-temperature measurements later.",
         "valves": {}, "pumps": {},
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
         "pipes": {},
@@ -563,6 +675,11 @@ SOP_STEPS = [
                 "4K, still and MXC stages are ≲15 K (typically 1.5-2 hrs) and Turbo1 rotates at "
                 "less than 100 Hz. Ensure the manual valve at the tank is open, then start PPC "
                 "by running Pulse_Pre_Cool_v1.24.",
+        "physics": "This briefly circulates mixture gas even though the fridge isn't cold "
+                "enough to condense it yet. The gas itself carries enthalpy from its "
+                "expansion and its passage through the DU's heat exchangers, so pulsing it "
+                "through gives the lower stages an extra cooling boost on top of the pulse "
+                "tube alone — shaving time off the slowest part of the cooldown.",
         "valves": {"TANK_V": True},
         "pumps": {},
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
@@ -579,6 +696,14 @@ SOP_STEPS = [
                 "gate valve V1 must be open during normal operation — it's the only way for "
                 "the mixture to return to the tank! Ensure the manual valve at the tank is "
                 "open, then start condensing by running condense_wLN2_v1_24.",
+        "physics": "This is where the actual dilution refrigeration cycle begins: below "
+                "4 K the He-3/He-4 mixture gas liquefies as it's fed in through the "
+                "condensing line, flowing down into the mixing chamber. There, below about "
+                "870 mK, the liquid spontaneously phase-separates into a He-3-rich phase "
+                "floating on a dilute phase — and it's the enthalpy cost of He-3 atoms "
+                "crossing that phase boundary that produces the fridge's cooling power. V1 "
+                "must stay open because it's the only path the circulating mixture has back "
+                "out to the tank; closing it would strand liquid mixture with nowhere to go.",
         "valves": {"TANK_V": True, "V1": True},
         "pumps": {},
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
@@ -594,6 +719,15 @@ SOP_STEPS = [
                 "grey until EXT is switched on. If it hasn't come on automatically, turn it on "
                 "manually and wait for the base temperature to stabilise before starting "
                 "measurements.",
+        "physics": "Continuous dilution refrigeration relies on constantly pumping He-3 "
+                "vapor away from the still — that's what drives He-3 atoms to keep crossing "
+                "the phase boundary in the mixing chamber, which is where the cooling power "
+                "actually comes from. But the still needs a small, steady heat input to keep "
+                "its He-3 vapor pressure high enough for the pump to extract it at a useful "
+                "rate — too cold and there's nothing to pump, which is why the still heater "
+                "under EXT control is what sustains circulation (and cooling) once you're at "
+                "base temperature, conceptually similar to how heating a boiler drives "
+                "circulation in absorption refrigeration.",
         "valves": {"TANK_V": True, "V1": True, "V4": True, "V7": True, "V9": True,
                     "V10": True, "V13": True},
         "pumps": {"SCROLL1": True, "TURBO1": True},
@@ -715,10 +849,18 @@ def compute_pipe_states(pipes, valve_state, pump_state):
 
     top = [tuple(pt) for pt in pipes["BPV1_BYPASS_TOP"].points]
     bot = [tuple(pt) for pt in pipes["BPV1_BYPASS_BOT"].points]
+    # top[-1] and bot[0] are both drawn at the same physical point (1255, 257)
+    # -- that's where the BPV1 valve itself sits. Give the bottom segment's
+    # end of the valve a distinct graph-node identity ("BPV1_BOT_PORT") so
+    # the two halves are only joined when BPV1 is actually open, instead of
+    # merging automatically just because they're drawn touching the same
+    # coordinate (which previously made BPV1's state irrelevant).
+    bpv1_bot_port = ("BPV1_BOT_PORT", bot[0])
     add_edge(top[0], top[-1])
-    add_edge(bot[0], bot[-1])
+    add_edge(bpv1_bot_port, bot[-1])
+    pipe_ends["BPV1_BYPASS_BOT"] = (bpv1_bot_port, bot[-1])
     if valve_state.get("BPV1", False):
-        add_edge(top[-1], bot[0])
+        add_edge(top[-1], bpv1_bot_port)
 
     # An idle turbo pump still passively conducts (no valve inside it), it
     # just isn't actively pulling/pushing -- so it contributes an ordinary
@@ -784,6 +926,18 @@ def snapshot_from_step(step):
     }
 
 
+def recompute_pipes():
+    """Re-derive pipe flowing/idle state from whatever the valve/pump objects
+    in session_state currently hold. Split out of apply_snapshot() so the
+    valve-by-valve animation below can call it after each individual toggle,
+    not just after a full snapshot is applied."""
+    valve_open = {vid: v.open for vid, v in st.session_state.valves.items()}
+    pump_on = {pid: p.on for pid, p in st.session_state.pumps.items()}
+    derived = compute_pipe_states(st.session_state.pipes, valve_open, pump_on)
+    for pid, p in st.session_state.pipes.items():
+        p.state = derived.get(pid, "off")
+
+
 def apply_snapshot(snap):
     for vid, v in st.session_state.valves.items():
         v.open = snap["valves"].get(vid, False)
@@ -795,17 +949,66 @@ def apply_snapshot(snap):
     # Derive which pipes are actually flowing from the valve/pump state
     # that was just applied, rather than trusting a separately hand-typed
     # "pipes" dict that can silently drift out of sync (see notes above).
-    valve_open = {vid: v.open for vid, v in st.session_state.valves.items()}
-    pump_on = {pid: p.on for pid, p in st.session_state.pumps.items()}
-    derived = compute_pipe_states(st.session_state.pipes, valve_open, pump_on)
-    for pid, p in st.session_state.pipes.items():
-        p.state = derived.get(pid, "off")
+    recompute_pipes()
 
     st.session_state.flow_box.value = snap.get("flow", "0.00")
     for gid, g in st.session_state.gauges.items():
         g.value = snap.get("gauges", {}).get(gid, g.value)
     for vid, v in st.session_state.vessels.items():
         v.level = snap.get("vessels", {}).get(vid, v.level)
+
+
+def draw_to_placeholder(placeholder, dpi=150):
+    """Render the current session_state into an existing st.empty() slot.
+    Used for both the final settled frame and each intermediate animation
+    frame, so animation and normal rendering stay pixel-identical.
+
+    Caches the resulting SVG in session_state so a later run that has
+    nothing new to show yet can redisplay it instantly (see app() below)
+    instead of leaving the slot empty while a fresh ~0.5s render runs."""
+    fig = render_figure(dpi=dpi)
+    svg_buf = io.StringIO()
+    fig.savefig(svg_buf, format="svg", facecolor=BG, bbox_inches="tight")
+    svg = svg_buf.getvalue()
+    st.session_state["_last_svg"] = svg
+    placeholder.image(svg, use_container_width=True)
+    plt.close(fig)
+
+
+def animate_transition(new_snapshot, order, placeholder, pause=0.45):
+    """Move from the current state to `new_snapshot`, animating valve
+    changes one at a time when `order` is given, then settling everything
+    else (pumps, panels, gauges, vessel levels, flow reading, and any valve
+    not mentioned in `order`) onto the final frame in one shot.
+
+    `order` entries can be either:
+      - a bare valve id, e.g. "V4"  -> its target state is looked up from
+        new_snapshot["valves"]; used when several valves' NET changes
+        (open->closed or closed->open) need a specific order.
+      - a (valve_id, "open"|"close") tuple -> an explicit intermediate
+        action, so a valve that nets to "no change" over the step (e.g.
+        opened to bleed pressure, then closed again before the step ends)
+        can still be shown happening.
+    Steps with no `order` (or order=None) apply instantly, unchanged from
+    the previous behavior — most steps don't need frame-by-frame replay.
+    """
+    if order:
+        target_valves = new_snapshot.get("valves", {})
+        for entry in order:
+            if isinstance(entry, tuple):
+                vid, action = entry
+                is_open = (action == "open")
+            else:
+                vid, is_open = entry, target_valves.get(entry, False)
+            valve = st.session_state.valves.get(vid)
+            if valve is None or valve.open == is_open:
+                continue  # already in that state -- nothing to animate
+            valve.open = is_open
+            recompute_pipes()
+            draw_to_placeholder(placeholder)
+            time.sleep(pause)
+    apply_snapshot(new_snapshot)
+    draw_to_placeholder(placeholder)
 
 
 def init_state():
@@ -972,12 +1175,16 @@ def draw_pipe(ax, pipe: Pipe):
     else:
         lw = 3.2 if flowing else 1.9
     ax.plot(xs, ys, color=color, lw=lw, solid_capstyle="round", zorder=2)
-    if flowing:
-        a, b = (pipe.points[-2], pipe.points[-1]) if pipe.state == "forward" \
-            else (pipe.points[1], pipe.points[0])
-        ax.annotate("", xy=b, xytext=a,
-                    arrowprops=dict(arrowstyle="-|>", color=color, lw=0, mutation_scale=17),
-                    zorder=3)
+    # Arrowheads temporarily disabled while pipe directions are being
+    # re-verified — re-enable by restoring the annotate() call below once
+    # directions are confirmed (state is still tracked as forward/reverse,
+    # only the arrow rendering is suppressed).
+    # if flowing:
+    #     a, b = (pipe.points[-2], pipe.points[-1]) if pipe.state == "forward" \
+    #         else (pipe.points[1], pipe.points[0])
+    #     ax.annotate("", xy=b, xytext=a,
+    #                 arrowprops=dict(arrowstyle="-|>", color=color, lw=0, mutation_scale=17),
+    #                 zorder=3)
 
 
 def draw_junction(ax, x, y):
@@ -1048,42 +1255,121 @@ def render_figure(dpi=300):
 st.set_page_config(page_title="Dilution Refrigerator FLow Schematic", layout="wide")
 init_state()
 
-st.title("Dilution Refrigerator — Flow Schematic")
-# ---- SOP stepper -----------------------------------------------------
-step = SOP_STEPS[st.session_state.sop_index]
 
-nav_l, nav_mid, nav_r = st.columns([1, 3, 1])
-with nav_l:
-    if st.button("⬅ Prev step", use_container_width=True,
-                  disabled=st.session_state.sop_index == 0):
-        st.session_state.sop_index -= 1
-        apply_snapshot(snapshot_from_step(SOP_STEPS[st.session_state.sop_index]))
-        st.rerun()
-with nav_r:
-    if st.button("Next step ➡", use_container_width=True,
-                  disabled=st.session_state.sop_index == len(SOP_STEPS) - 1):
-        st.session_state.sop_index += 1
-        apply_snapshot(snapshot_from_step(SOP_STEPS[st.session_state.sop_index]))
-        st.rerun()
-with nav_mid:
-    names = [s["name"] for s in SOP_STEPS]
-    chosen = st.selectbox("SOP step", names, index=st.session_state.sop_index, label_visibility="collapsed")
-    if names.index(chosen) != st.session_state.sop_index:
-        st.session_state.sop_index = names.index(chosen)
-        apply_snapshot(snapshot_from_step(step))
-        st.rerun()
+# Everything interactive lives in one fragment. On a Next/Prev/selectbox
+# click, Streamlit reruns ONLY this function -- not the whole script/page --
+# which is what actually removes the reload-y whole-app flash; a bare
+# st.rerun() (or none at all) still reruns everything above/below it.
+# Requires Streamlit >= 1.33 (st.fragment).
+@st.fragment
+def app():
+    # Single persistent slot the schematic is drawn into. A rendered frame
+    # costs ~0.5s (measured), so if this fragment's slot were left empty
+    # while that render runs, the schematic would visibly blank out on
+    # every click. Instead, redisplay the last frame instantly from cache
+    # first (near-zero cost -- it's just a stored string), so the slot is
+    # never empty; any subsequent frame (below, via _go_to_step) then
+    # overwrites it once it's actually ready.
+    img_placeholder = st.empty()
+    cached_svg = st.session_state.get("_last_svg")
+    if cached_svg is not None:
+        img_placeholder.image(cached_svg, use_container_width=True)
+    else:
+        draw_to_placeholder(img_placeholder)  # first-ever load only
 
-st.progress((st.session_state.sop_index + 1) / len(SOP_STEPS))
-st.info(f"**{step['name']}** — {step['note']}")
+    # ---- Sidebar: title + SOP stepper + description ------------------
+    # Kept in the sidebar (its own independently-scrolling panel) so the
+    # step controls and description are always visible without pushing
+    # the schematic below the fold in the main pane.
+    with st.sidebar:
+        st.title("DR Flow Schematic")
 
-fig = render_figure(dpi=150)
+        animate_on = st.toggle(
+            "Animate valve sequencing", value=st.session_state.get("animate_on", True),
+            help="When a step's valves must be actuated in a specific order, "
+                 "replay them one at a time instead of jumping straight to the "
+                 "end state. Steps with no ordering requirement are unaffected.")
+        st.session_state.animate_on = animate_on
 
-# Render vector SVG directly to Streamlit canvas for crisp display
-svg_buf = io.StringIO()
-fig.savefig(svg_buf, format="svg", facecolor=BG, bbox_inches="tight")
-st.image(svg_buf.getvalue(), use_container_width=True)
+        def _go_to_step(index):
+            # `order` describes how to arrive at a step FROM the step right
+            # before it -- it isn't a valid sequence for jumping in from
+            # anywhere else, so only honor it on a normal single forward
+            # step (clicking Next, or the dropdown landing one step ahead).
+            is_single_forward_step = index == st.session_state.sop_index + 1
+            target = SOP_STEPS[index]
+            order = target.get("order") if (animate_on and is_single_forward_step) else None
+            st.session_state.sop_index = index
+            animate_transition(snapshot_from_step(target), order, img_placeholder)
 
-plt.close(fig)
+        nav_l, nav_r = st.columns(2)
+        with nav_l:
+            if st.button("⬅ Prev", use_container_width=True,
+                          disabled=st.session_state.sop_index == 0):
+                _go_to_step(st.session_state.sop_index - 1)
+        with nav_r:
+            if st.button("Next ➡", use_container_width=True,
+                          disabled=st.session_state.sop_index == len(SOP_STEPS) - 1):
+                _go_to_step(st.session_state.sop_index + 1)
 
-st.caption("Legend — black line: idle · blue dashed-style line + arrow: flowing, arrow = direction · "
-           "blue ring: valve open / pump running · gray fill: valve shut / pump off.")
+        names = [s["name"] for s in SOP_STEPS]
+        chosen = st.selectbox("SOP step", names, index=st.session_state.sop_index, label_visibility="collapsed")
+        if names.index(chosen) != st.session_state.sop_index:
+            _go_to_step(names.index(chosen))
+
+        # Read fresh, after the controls above may have changed it this pass.
+        step = SOP_STEPS[st.session_state.sop_index]
+
+        st.progress((st.session_state.sop_index + 1) / len(SOP_STEPS))
+
+        step_num = st.session_state.sop_index + 1
+        step_total = len(SOP_STEPS)
+        st.markdown(f"""
+        <div style="
+            background:#EEF4FF;
+            border-left:6px solid #1E6FE0;
+            border-radius:10px;
+            padding:14px 18px 16px 16px;
+            margin: 4px 0 16px 0;
+        ">
+            <div style="
+                font-family:monospace;
+                font-size:0.78rem;
+                font-weight:700;
+                letter-spacing:0.06em;
+                color:#1E6FE0;
+                margin-bottom:6px;
+            ">
+                STEP {step_num} OF {step_total}
+            </div>
+            <div style="
+                font-size:1.2rem;
+                font-weight:700;
+                color:#101418;
+                line-height:1.3;
+                margin-bottom:10px;
+            ">
+                {step['name']}
+            </div>
+            <div style="
+                font-size:0.98rem;
+                line-height:1.55;
+                color:#1A1F26;
+            ">
+                {step['note']}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if step.get("physics"):
+            with st.expander("💡 Why this step matters (physics)"):
+                st.markdown(
+                    f"<div style='font-size:0.95rem; line-height:1.55;'>{step['physics']}</div>",
+                    unsafe_allow_html=True,
+                )
+
+        st.caption("Legend — black line: idle · blue line: flowing · "
+                   "blue ring: valve open / pump running · gray fill: valve shut / pump off.")
+
+
+app()
