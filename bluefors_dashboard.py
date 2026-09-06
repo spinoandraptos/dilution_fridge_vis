@@ -335,6 +335,10 @@ def build_diagram():
         "BPV3_TEE_DOWN":  Pipe("BPV3_TEE_DOWN",  "BPV3 tee down",         [(1060, 760), (1060, 778)]),
         "BPV3_DOWN_RUN":  Pipe("BPV3_DOWN_RUN",  "BPV3 down to run",      [(1060, 822), (1060, 930)]),
         "P5_TAP":         Pipe("P5_TAP",         "P5 tap",                [(1138, 985), (1220, 985), (1220, 930)]),
+        # TANK_V's near-side flank (1220,850) already sits exactly on the tank
+        # vessel's own bottom edge, so there's no real pipe length on this side
+        # of the valve -- it must NOT reach across to the valve's far-side
+        # flank (1220,900) or beyond, or it bridges straight around TANK_V.
         "TANKLINE_TO_TANK":Pipe("TANKLINE_TO_TANK","Tank line up to tank", [(1220, 850), (1220, 850)]),
         "TANK_OUTLET_DOWN":Pipe("TANK_OUTLET_DOWN","Tank outlet down",    [(1220, 900), (1220, 930)]),
 
@@ -411,6 +415,9 @@ SOP_STEPS = [
         "valves": {}, "pumps": {}, "panels": {},
         "gauges": {"P2": "4.50E-2", "P3": "0.00E+0", "P4": "7.65E+2", "P5": "7.62E+2"},
         "flow": "0.00",
+        # All these valves end up closed -- a plain snapshot would just show
+        # them all snap shut at once. The note is explicit that the CLOSING
+        # order matters (far end inward), so replay it valve-by-valve.
         "order": ["V4", "V3", "V1", "V2", "V10", "V13"],
     },
 
@@ -449,6 +456,10 @@ SOP_STEPS = [
         "panels": {},
         "gauges": {"P6": "4.10E+1"},
         "flow": "0.00",
+        # V2 nets to "closed" both before and after this step -- it's opened
+        # to bleed pressure across V1, then closed again once V1 is open. A
+        # before/after diff would never show that happening, so this step
+        # needs explicit (valve, action) entries rather than bare valve ids.
         "order": [("V2", "open"), ("V1", "open"), ("V2", "close")],
     },
     {
@@ -543,7 +554,7 @@ SOP_STEPS = [
                 "because atmospheric pressure is now pressing the can onto its o-ring far "
                 "harder than the bolts ever could — that's the vacuum doing the sealing, "
                 "which is why retightening them would actually risk deforming the seal.",
-        "valves": {"V21": True, "V16": True, "V14": True},
+        "valves": {"V21": True, "V16": True, "V14": True, "TANK_V": True},
         "pumps": {"SCROLL2": True},
         "panels": {},
         "gauges": {"P1": "3.20E+1"},
@@ -559,7 +570,7 @@ SOP_STEPS = [
                 "turbopump takes over for the final decade or two of vacuum, getting the can "
                 "to a pressure low enough that gas conduction between the stages becomes "
                 "genuinely negligible.",
-        "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
+        "valves": {"V21": True, "V14": True, "V18": True, "V15": True, "TANK_V": True},
         "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {},
         "gauges": {"P1": "8.70E-4"},
@@ -574,7 +585,7 @@ SOP_STEPS = [
                 "seal to have shifted. Catching it now — while everything is still at room "
                 "temperature and accessible — is vastly easier than discovering a leak once "
                 "the fridge is cold and the leak path is buried under kilograms of metal.",
-        "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
+        "valves": {"V21": True, "V14": True, "V18": True, "V15": True, "TANK_V": True},
         "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {},
         "gauges": {"P1": "2.00E-3"},
@@ -602,7 +613,7 @@ SOP_STEPS = [
                 "The small still-heater bias keeps its thermometer in a stable, predictable "
                 "regime during the ramp instead of drifting through a noisy near-zero-power "
                 "region.",
-        "valves": {"V21": True, "V14": True, "V18": True, "V15": True},
+        "valves": {"V21": True, "V14": True, "V18": True, "V15": True, "TANK_V": True},
         "pumps": {"SCROLL2": True, "TURBO1": True},
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
         "gauges": {"P1": "4.10E-5"},
@@ -619,10 +630,15 @@ SOP_STEPS = [
                 "now evacuating itself, so continuing to run Turbo1/Scroll2 adds nothing "
                 "except mechanical vibration coupling into the cold stages, which is exactly "
                 "what you don't want for sensitive low-temperature measurements later.",
-        "valves": {}, "pumps": {},
+        "valves": {"TANK_V": True}, "pumps": {},
         "panels": {"PULSE_TUBE": True, "HS_STILL": True, "HS_MC": True},
         "gauges": {"P1": "1.80E-5"},
         "flow": "0.00",
+        # All four net to "closed" -- a plain snapshot would just show them
+        # all snap shut at once. The note is explicit that the CLOSING order
+        # matters (V14 first, in case of air in the VC), so replay it
+        # valve-by-valve.
+        "order": ["V14", "V15", "V18", "V21"],
     },
 
     # ========================= Section 1.6: Pulse Pre-cooling (optional) =========================
@@ -795,6 +811,12 @@ def compute_pipe_states(pipes, valve_state, pump_state):
 
     top = [tuple(pt) for pt in pipes["BPV1_BYPASS_TOP"].points]
     bot = [tuple(pt) for pt in pipes["BPV1_BYPASS_BOT"].points]
+    # top[-1] and bot[0] are both drawn at the same physical point (1255, 257)
+    # -- that's where the BPV1 valve itself sits. Give the bottom segment's
+    # end of the valve a distinct graph-node identity ("BPV1_BOT_PORT") so
+    # the two halves are only joined when BPV1 is actually open, instead of
+    # merging automatically just because they're drawn touching the same
+    # coordinate (which previously made BPV1's state irrelevant).
     bpv1_bot_port = ("BPV1_BOT_PORT", bot[0])
     add_edge(top[0], top[-1])
     add_edge(bpv1_bot_port, bot[-1])
@@ -888,7 +910,7 @@ def apply_snapshot(snap):
 
     # Derive which pipes are actually flowing from the valve/pump state
     # that was just applied, rather than trusting a separately hand-typed
-    # "pipes" dict that can silently drift out of sync
+    # "pipes" dict that can silently drift out of sync (see notes above).
     recompute_pipes()
 
     st.session_state.flow_box.value = snap.get("flow", "0.00")
@@ -899,6 +921,13 @@ def apply_snapshot(snap):
 
 
 def draw_to_placeholder(placeholder, dpi=150):
+    """Render the current session_state into an existing st.empty() slot.
+    Used for both the final settled frame and each intermediate animation
+    frame, so animation and normal rendering stay pixel-identical.
+
+    Caches the resulting SVG in session_state so a later run that has
+    nothing new to show yet can redisplay it instantly (see app() below)
+    instead of leaving the slot empty while a fresh ~0.5s render runs."""
     fig = render_figure(dpi=dpi)
     svg_buf = io.StringIO()
     fig.savefig(svg_buf, format="svg", facecolor=BG, bbox_inches="tight")
@@ -913,6 +942,17 @@ def animate_transition(new_snapshot, order, placeholder, pause=0.45):
     changes one at a time when `order` is given, then settling everything
     else (pumps, panels, gauges, vessel levels, flow reading, and any valve
     not mentioned in `order`) onto the final frame in one shot.
+
+    `order` entries can be either:
+      - a bare valve id, e.g. "V4"  -> its target state is looked up from
+        new_snapshot["valves"]; used when several valves' NET changes
+        (open->closed or closed->open) need a specific order.
+      - a (valve_id, "open"|"close") tuple -> an explicit intermediate
+        action, so a valve that nets to "no change" over the step (e.g.
+        opened to bleed pressure, then closed again before the step ends)
+        can still be shown happening.
+    Steps with no `order` (or order=None) apply instantly, unchanged from
+    the previous behavior — most steps don't need frame-by-frame replay.
     """
     if order:
         target_valves = new_snapshot.get("valves", {})
@@ -1090,7 +1130,8 @@ def draw_pipe(ax, pipe: Pipe):
     ys = [pt[1] for pt in pipe.points]
     flowing = pipe.state != "off"
     color = FLOW if flowing else LINE_IDLE
-
+    # Bold trunk lines (large-bore tubing, e.g. the Turbo1->Scroll1 foreline) are drawn
+    # heavier than regular lines whether or not they're currently flowing.
     if pipe.bold:
         lw = 4.2 if flowing else 3.2
     else:
@@ -1176,8 +1217,21 @@ def render_figure(dpi=300):
 st.set_page_config(page_title="Dilution Refrigerator FLow Schematic", layout="wide")
 init_state()
 
+
+# Everything interactive lives in one fragment. On a Next/Prev/selectbox
+# click, Streamlit reruns ONLY this function -- not the whole script/page --
+# which is what actually removes the reload-y whole-app flash; a bare
+# st.rerun() (or none at all) still reruns everything above/below it.
+# Requires Streamlit >= 1.33 (st.fragment).
 @st.fragment
 def app():
+    # Single persistent slot the schematic is drawn into. A rendered frame
+    # costs ~0.5s (measured), so if this fragment's slot were left empty
+    # while that render runs, the schematic would visibly blank out on
+    # every click. Instead, redisplay the last frame instantly from cache
+    # first (near-zero cost -- it's just a stored string), so the slot is
+    # never empty; any subsequent frame (below, via _go_to_step) then
+    # overwrites it once it's actually ready.
     img_placeholder = st.empty()
     cached_svg = st.session_state.get("_last_svg")
     if cached_svg is not None:
@@ -1185,6 +1239,10 @@ def app():
     else:
         draw_to_placeholder(img_placeholder)  # first-ever load only
 
+    # ---- Sidebar: title + SOP stepper + description ------------------
+    # Kept in the sidebar (its own independently-scrolling panel) so the
+    # step controls and description are always visible without pushing
+    # the schematic below the fold in the main pane.
     with st.sidebar:
         st.title("DR Flow Schematic")
 
@@ -1196,6 +1254,10 @@ def app():
         st.session_state.animate_on = animate_on
 
         def _go_to_step(index):
+            # `order` describes how to arrive at a step FROM the step right
+            # before it -- it isn't a valid sequence for jumping in from
+            # anywhere else, so only honor it on a normal single forward
+            # step (clicking Next, or the dropdown landing one step ahead).
             is_single_forward_step = index == st.session_state.sop_index + 1
             target = SOP_STEPS[index]
             order = target.get("order") if (animate_on and is_single_forward_step) else None
